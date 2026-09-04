@@ -15,7 +15,11 @@ import { getAgentConfigs, getAgentRoutes } from "./agents/index"
 import { loadFlowDeckConfig, resolveAgentModels, type FlowDeckConfig } from "./config/index"
 import { sessionStartHook } from "./hooks/session-start"
 import { sessionEventsHook } from "./hooks/session-events"
-import { toolGuardHook } from "./hooks/tool-guard"
+import { createSessionIdleHook } from "./hooks/session-idle-hook"
+import { createShellEnvHook } from "./hooks/shell-env-hook"
+import { createContextWindowMonitorHook } from "./hooks/context-window-monitor"
+import { NotificationController } from "./hooks/notifications"
+import { getWriteCount, getWrittenFiles, toolGuardHook } from "./hooks/tool-guard"
 import { buildFlowDeckMcpsWithMeta } from "./mcp/index"
 import { captureLessonTool, reviewLessonsTool } from "./tools/capture-lesson"
 import { codebaseStateTool } from "./tools/codebase-state"
@@ -55,6 +59,21 @@ function lazyLoadRulePaths(projectRoot: string): { paths: string[]; diagnostics:
   return { paths, diagnostics: buildSelectionDiagnostics(selection, { languages: detected, projectRoot }) }
 }
 
+/**
+ * Extract a displayable error message from a session.error event.
+ * The SDK carries an error OBJECT (properties.error.message); partial
+ * payloads may carry a string or nothing at all. Never throws.
+ */
+function extractSessionErrorMessage(event: { properties?: unknown }): string {
+  const props = event?.properties as { error?: unknown } | undefined
+  const err = props?.error
+  if (typeof err === "string") return err
+  if (err && typeof err === "object" && typeof (err as { message?: unknown }).message === "string") {
+    return (err as { message: string }).message
+  }
+  return ""
+}
+
 /** Load FlowDeck slash commands from src/commands/*.md (parses frontmatter description). */
 function loadCommands(): Record<string, { description?: string; template: string }> {
   const dir = join(__dir, "..", "src", "commands")
@@ -73,7 +92,7 @@ function loadCommands(): Record<string, { description?: string; template: string
   return out
 }
 
-const plugin: Plugin = async ({ directory, client }) => {
+const plugin: Plugin = async ({ directory, client, worktree }) => {
   const appLog = (msg: string): Promise<void> =>
     client.app.log({ body: { service: "flowdeck", level: "info", message: msg } })
       .then(() => undefined).catch(() => {})
@@ -82,6 +101,11 @@ const plugin: Plugin = async ({ directory, client }) => {
   const loopDetector = new LoopDetector(flowdeckConfig.governance?.loopDetection, appLog)
 
   const { mcps } = buildFlowDeckMcpsWithMeta()
+
+  const shellEnvHook = createShellEnvHook({ directory, worktree })
+  const sessionIdleHook = createSessionIdleHook(client, getWrittenFiles)
+  const notifications = new NotificationController()
+  const contextMonitor = createContextWindowMonitorHook()
 
   return {
     name: "@dv.nghiem/flowdeck",
@@ -178,9 +202,10 @@ const plugin: Plugin = async ({ directory, client }) => {
       if (loop.action === "warn") appLog(loop.message)
     },
 
-    "tool.execute.after": async (toolInput: any) => {
-      appLog(`[tool] done tool=${toolInput.tool ?? toolInput.name ?? "unknown"} session=${toolInput.sessionID ?? ""}`)
-      // SDK's tool.execute.after only exposes toolInput (toolOutput is unavailable here).
+    "tool.execute.after": async (toolInput: any, toolOutput: any) => {
+      if (process.env.FLOWDECK_DEBUG) {
+        appLog(`[tool] done tool=${toolInput.tool ?? toolInput.name ?? "unknown"} session=${toolInput.sessionID ?? ""}`)
+      }
       // Pass a sentinel for output so call-count tracking still works; if the SDK
       // includes output on toolInput, prefer it for hash-based loop detection.
       loopDetector.recordAfter(
@@ -189,16 +214,38 @@ const plugin: Plugin = async ({ directory, client }) => {
         toolInput.output ?? "[unavailable]",
         toolInput.sessionID ?? "",
       )
+      // Context window monitor appends a one-time reminder to the tool output.
+      await contextMonitor["tool.execute.after"](toolInput, toolOutput)
+    },
+
+    "shell.env": async (input: unknown, output: { env: Record<string, string> }) => {
+      await shellEnvHook(input, output)
     },
 
     event: async ({ event }: { event: any }) => {
       const type: string = event?.type ?? ""
       if (type === "session.created" || type === "session.started") {
         await sessionStartHook({ directory }, appLog)
-      } else if (type === "session.idle" || type === "session.error") {
+      } else if (type === "command.executed") {
+        const name = event?.properties?.name
+        if (typeof name === "string" && name.length > 0) {
+          notifications.onCommandExecuted(name)
+        }
+      } else if (type === "session.idle") {
         const sessionID = event?.properties?.sessionID ?? ""
-        await sessionEventsHook({ directory }, type === "session.idle" ? "idle" : "error", sessionID)
+        // Capture edit state BEFORE sessionEventsHook — it clears the write counter.
+        const hasEdits = getWriteCount(sessionID) > 0
+        await sessionIdleHook(sessionID)
+        notifications.onSessionIdle(hasEdits)
+        await sessionEventsHook({ directory }, "idle", sessionID)
+      } else if (type === "session.error") {
+        const sessionID = event?.properties?.sessionID ?? ""
+        const errorMessage = extractSessionErrorMessage(event)
+        notifications.onSessionError(errorMessage)
+        await sessionEventsHook({ directory }, "error", sessionID, errorMessage)
       }
+      // Context window monitor tracks message token usage + session cleanup.
+      await contextMonitor.event({ event })
     },
   }
 }

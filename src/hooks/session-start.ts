@@ -1,22 +1,17 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs"
+import { existsSync, readFileSync, writeFileSync, mkdirSync, statSync } from "fs"
 import { basename, dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { homedir } from "os"
 import { execFileSync } from "node:child_process"
-import { statePath, parseState, findWorkspaceRoot, getWorkspaceConfig, planningDir, resolveActiveTopic } from "../tools/planning-state-lib"
+import { statePath, parseState, findWorkspaceRoot, getWorkspaceConfig, planningDir } from "../tools/planning-state-lib"
 import { codebaseDir } from "../tools/codebase-state"
 import {
   detectProjectLanguages,
   getStartupRulePaths,
 } from "../services/lazy-rule-loader"
-import { buildTokenBudget, estimateTokensFromBytes } from "../services/token-budget"
-import { readPlanCanonical } from "../services/planning-paths"
 import { getRegistryDriftSummary } from "../services/registry-snapshot"
 import { appendAuditEvent } from "../services/audit-log"
 import { FD_PIPELINE } from "../services/supervisor-binding"
-
-const MAX_LESSON_SECTIONS = 10
-const MAX_LESSON_CONTEXT_BYTES = 8 * 1024
 
 let fdxAvailable = false
 let fdxChecked = false
@@ -56,24 +51,13 @@ function resolveRulesDir(): string {
 
 /**
  * Split a lessons markdown file into sections starting with "## " and return
- * the most recent sections while keeping the total size under a byte cap.
+ * only the most recent section plus the total section count. Lessons are
+ * appended chronologically (oldest first), so the last section is the newest.
+ * The full lesson history stays available via the review-lessons tool.
  */
-function capLessonsContent(content: string): { cappedContent: string; totalCount: number } {
+function latestLessonSection(content: string): { latestSection: string; totalCount: number } {
   const sections = content.split(/\n(?=## )/).filter(Boolean)
-  const totalCount = sections.length
-  if (totalCount === 0) return { cappedContent: "", totalCount: 0 }
-
-  const recentSections = sections.slice(-MAX_LESSON_SECTIONS)
-  let cappedContent = recentSections.join("\n\n").trim()
-  if (Buffer.byteLength(cappedContent, "utf-8") > MAX_LESSON_CONTEXT_BYTES) {
-    // Drop oldest sections one at a time until under the cap.
-    let kept = recentSections
-    while (kept.length > 1 && Buffer.byteLength(kept.join("\n\n").trim(), "utf-8") > MAX_LESSON_CONTEXT_BYTES) {
-      kept = kept.slice(1)
-    }
-    cappedContent = kept.join("\n\n").trim()
-  }
-  return { cappedContent, totalCount }
+  return { latestSection: sections.at(-1)?.trim() ?? "", totalCount: sections.length }
 }
 
 /**
@@ -108,9 +92,9 @@ function buildLeanContext(projectRoot: string, log?: (msg: string) => void | Pro
     }
   }
   const rawLessonsContent = existsSync(globalLessonsPath) ? readFileSync(globalLessonsPath, "utf-8").trim() : ""
-  const { cappedContent: lessonsContent, totalCount: lessonsCount } = rawLessonsContent
-    ? capLessonsContent(rawLessonsContent)
-    : { cappedContent: "", totalCount: 0 }
+  const { latestSection: lessonsContent, totalCount: lessonsCount } = rawLessonsContent
+    ? latestLessonSection(rawLessonsContent)
+    : { latestSection: "", totalCount: 0 }
   if (log && lessonsCount > 0) {
     log(`[session-start] loaded ${lessonsCount} captured lesson(s) from ${globalLessonsPath}`)
   }
@@ -141,7 +125,13 @@ function buildLeanContext(projectRoot: string, log?: (msg: string) => void | Pro
     flowdeck_rule_paths: rulePaths,
     flowdeck_lessons_bytes: Buffer.byteLength(lessonsContent, "utf-8"),
     flowdeck_rules_bytes: rulePaths.reduce(
-      (sum, p) => sum + Buffer.byteLength(p, "utf-8"),
+      (sum, p) => {
+        try {
+          return sum + statSync(p).size
+        } catch {
+          return sum
+        }
+      },
       0,
     ),
   }
@@ -171,28 +161,10 @@ export async function sessionStartHook(
   // Lean context: lessons + language rules (reuses lazy-rule-loader cache).
   const leanContext = buildLeanContext(ctx.directory, log)
 
-  // Phase-4 readiness: fdx-graph status and token budget breakdown.
+  // Phase-4 readiness: fdx-graph status.
   const graphJsonPath = join(homedir(), ".fd-plan", basename(ctx.directory), "graph.json")
   const graphReady = existsSync(graphJsonPath)
   const graphStatus = graphReady ? "ready" : "not built — run fdx-graph action:build"
-  let planBytes = 0
-  try {
-    const activeTopic = resolveActiveTopic(ctx.directory)
-    if (activeTopic) {
-      const { content } = readPlanCanonical(ctx.directory, activeTopic)
-      planBytes = Buffer.byteLength(content, "utf-8")
-    }
-  } catch { /* ignore */ }
-
-  const lessonsBytes = Number(leanContext.flowdeck_lessons_bytes ?? 0)
-  const rulesBytes = Number(leanContext.flowdeck_rules_bytes ?? 0)
-  const tokenBudget = buildTokenBudget(
-    0,
-    estimateTokensFromBytes(planBytes),
-    undefined,
-    lessonsBytes,
-    rulesBytes,
-  )
 
   // Bounded runtime wiring: registry drift summary (audit only when drift exists).
   const driftSummary = await getRegistryDriftSummary(ctx.directory)
@@ -226,13 +198,12 @@ export async function sessionStartHook(
     return {
       flowdeck_phase: null,
       flowdeck_status: "no_plan",
-      flowdeck_warning: "No planning workspace yet. Run /fd-task to initialize and plan the first task.",
+      flowdeck_warning: "No planning workspace. Run /fd-task first.",
       flowdeck_has_codebase: existsSync(codebaseDirectory),
       flowdeck_fdx_ready: fdxReady,
       ...leanContext,
       flowdeck_graph_ready: graphReady,
       flowdeck_graph_status: graphStatus,
-      flowdeck_token_budget: tokenBudget,
       flowdeck_registry_drift: driftSummary.hasDrift ? driftSummary.report : null,
       ...pipelineContext,
       ...(workspaceRoot && config?.sub_repos ? {
@@ -261,7 +232,6 @@ export async function sessionStartHook(
       ...leanContext,
       flowdeck_graph_ready: graphReady,
       flowdeck_graph_status: graphStatus,
-      flowdeck_token_budget: tokenBudget,
       flowdeck_registry_drift: driftSummary.hasDrift ? driftSummary.report : null,
       ...pipelineContext,
     }
@@ -287,7 +257,6 @@ export async function sessionStartHook(
       ...leanContext,
       flowdeck_graph_ready: graphReady,
       flowdeck_graph_status: graphStatus,
-      flowdeck_token_budget: tokenBudget,
       flowdeck_registry_drift: driftSummary.hasDrift ? driftSummary.report : null,
       ...pipelineContext,
     }

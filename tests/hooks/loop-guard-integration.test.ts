@@ -107,7 +107,7 @@ describe("loop-guard-integration", () => {
     // 3rd execution — should throw because loopDetector blocks
     await expect(
       simulateHookFlow(eventLog, loopDetector, toolInput, toolOutput, dir, appLog)
-    ).rejects.toThrow(/FlowDeck Loop Guard/)
+    ).rejects.toThrow(/FLOWDECK \[loop-guard\]/)
   })
 
   it("executes normally when no loop is detected", async () => {

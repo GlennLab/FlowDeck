@@ -132,7 +132,7 @@ cases and edge cases, using AAA (Arrange-Act-Assert).
 The guard verifies the test actually fails before proceeding. If the agent skips to
 GREEN without a failing test → block with:
 ```
-[TDD Guard] Cannot write production code before a failing test exists.
+FLOWDECK [tdd-guard]: Cannot write production code before a failing test exists.
 Current stage: behavior
 Required: write a failing test first, then implement.
 ```

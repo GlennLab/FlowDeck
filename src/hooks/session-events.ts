@@ -1,6 +1,7 @@
 import { appendFileSync, mkdirSync, existsSync, readFileSync, writeFileSync } from "fs"
 import { basename, join } from "path"
 import { statePath, parseState, planningDir, checkpointPath } from "../tools/planning-state-lib"
+import { flowdeckError, sanitizeErrorText } from "../lib/flowdeck-message"
 import { clearWriteCounter } from "./tool-guard"
 
 const LOG_DIR = ".opencode"
@@ -10,11 +11,15 @@ const LOG_FILE = "flowdeck.log"
  * HOOK-02: Idle and error session notifications
  * Writes JSON Lines entries to .opencode/flowdeck.log, and on idle refreshes
  * `~/.fd-plan/<slug>/checkpoint.json` so an interrupted session stays resumable.
+ *
+ * On error, the raw error message may carry secrets (URL userinfo, Bearer
+ * tokens, key=value credentials), so it is sanitized before being written.
  */
 export async function sessionEventsHook(
   ctx: { directory: string },
   eventType: "idle" | "error",
   sessionID: string,
+  errorMessage?: string,
 ): Promise<void> {
   const logDir = join(ctx.directory, LOG_DIR)
   const logPath = join(logDir, LOG_FILE)
@@ -24,7 +29,7 @@ export async function sessionEventsHook(
     try {
       mkdirSync(logDir, { recursive: true })
     } catch (err) {
-      throw new Error(`[flowdeck] ERROR: Could not create log directory: ${err instanceof Error ? err.message : String(err)}`)
+      throw new Error(flowdeckError("log", `Could not create log directory: ${err instanceof Error ? err.message : String(err)}`))
     }
   }
 
@@ -42,7 +47,10 @@ export async function sessionEventsHook(
       : "Session encountered an error."
 
   // Write JSON Lines entry to .opencode/flowdeck.log (log only, no stdout to avoid overwriting OpenCode input box)
-  const entry = { timestamp, event: eventType, phase, detail }
+  const entry: Record<string, unknown> = { timestamp, event: eventType, phase, detail }
+  if (eventType === "error" && errorMessage) {
+    entry.error = sanitizeErrorText(errorMessage)
+  }
   appendFileSync(logPath, JSON.stringify(entry) + "\n", "utf-8")
 }
 

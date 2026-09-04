@@ -180,6 +180,11 @@ export class NotificationController {
   /**
    * Called when the `session.error` event fires.
    * Always fires unless the identical error was already reported.
+   *
+   * M1: the OS notification body is STATIC — raw error text can carry
+   * secrets (URL userinfo, Bearer tokens, credentials) and notification
+   * centers are a sensitive sink. The error detail stays in the
+   * sanitized flowdeck.log entry instead.
    */
   onSessionError(errorMsg: string): void {
     const snippet = errorMsg.slice(0, 60)
@@ -191,7 +196,7 @@ export class NotificationController {
     }
 
     this.log(`[notify] firing notification: reason=error source=session.error`)
-    this.notifyFn("FlowDeck Error", snippet || "An error occurred", "critical")
+    this.notifyFn("FlowDeck Error", "FlowDeck error — check OpenCode", "critical")
     this.lastNotifiedKey = dedupeKey
     // Clear any pending command — the workflow is broken
     this.pendingCommand = null

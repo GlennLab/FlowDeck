@@ -36,8 +36,12 @@ export function createContextWindowMonitorHook() {
 
   const toolExecuteAfter = async (
     input: { sessionID: string },
-    output: { output: string }
+    output: { output?: string }
   ) => {
+    // Runtime guard: the SDK output shape is not guaranteed at every call
+    // site — never mutate a non-string output.
+    if (typeof output?.output !== "string") return
+
     const { sessionID } = input
     if (remindedSessions.has(sessionID)) return
 

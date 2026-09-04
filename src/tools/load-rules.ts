@@ -79,7 +79,7 @@ export const loadRulesTool: ToolDefinition = tool({
         skipped_already_loaded: [],
         skipped_no_match: [],
         content: "",
-        error: `Rules directory not found at ${RULES_DIR}`,
+        error: "Rules directory not found. Reinstall the plugin.",
       })
     }
 
@@ -148,7 +148,7 @@ export const listRulesTool: ToolDefinition = tool({
   async execute(): Promise<string> {
     const rulesDir = existsSync(RULES_DIR) ? RULES_DIR : null
     if (!rulesDir) {
-      return JSON.stringify({ rules: [], error: `Rules directory not found at ${RULES_DIR}` })
+      return JSON.stringify({ rules: [], error: "Rules directory not found. Reinstall the plugin." })
     }
 
     const all = discoverRules(rulesDir)

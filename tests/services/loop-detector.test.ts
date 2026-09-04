@@ -283,7 +283,7 @@ describe("LoopDetector", () => {
       if (result.action === "block") {
         expect(result.escalationMessage).toContain("bash")
         expect(result.escalationMessage).toContain("cargo test --lib")
-        expect(result.escalationMessage).toContain("FlowDeck Loop Guard")
+        expect(result.escalationMessage).toContain("FLOWDECK [loop-guard]")
       }
     })
 

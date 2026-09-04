@@ -2,6 +2,7 @@ import { tool, type ToolDefinition } from "@opencode-ai/plugin"
 import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync, statSync } from "fs"
 import { basename, join } from "path"
 import { homedir } from "os"
+import { maskHomePath } from "../lib/flowdeck-message"
 
 const LEGACY_LESSONS_FILE = ".flowdeck/lessons.md"
 const DEFAULT_LESSONS_FILE = join(homedir(), ".fd-plan", "lessons.md")
@@ -96,7 +97,7 @@ export const captureLessonTool: ToolDefinition = tool({
     ].join("\n")
 
     appendFileSync(filePath, entry)
-    return `Lesson captured in ${filePath}`
+    return `Lesson captured in ${maskHomePath(filePath)}`
   },
 })
 
@@ -114,7 +115,7 @@ export const reviewLessonsTool: ToolDefinition = tool({
     const path = lessonsFilePath()
     if (!existsSync(path)) return "No lessons captured yet."
     const content = readFileSync(path, "utf-8").trim()
-    if (!content) return "No lessons yet."
+    if (!content) return "No lessons captured yet."
     const sections = content.split(/\n(?=## )/).filter(Boolean)
     const useKeywords = (args.keywords?.length ?? 0) > 0
     if (!useKeywords) {

@@ -1,7 +1,7 @@
 /**
  * Session Idle Hook
  * Fires when OpenCode's session becomes idle (task completed).
- * Logs a summary of edited files via client.app.log.
+ * Logs a summary of files written this session via the tool-guard write set.
  *
  * NOTE: Desktop notifications are no longer sent from this hook.
  * They are handled by NotificationController in notifications.ts, which
@@ -9,16 +9,14 @@
  * session.error on failure) and deduplicates properly.
  */
 
-import type { SessionFileTracker } from "./file-tracker"
-
 export function createSessionIdleHook(
   client: { app: { log: (args: { body: { service: string; level: "info" | "warn" | "error" | "debug"; message: string } }) => Promise<any> } },
-  tracker: SessionFileTracker,
+  getWrittenFiles: (sessionID: string) => string[],
 ) {
-  return async () => {
+  return async (sessionID: string) => {
     try {
       // Only log when files were actually modified this turn.
-      const edited = tracker.getEditedPaths()
+      const edited = getWrittenFiles(sessionID)
       if (edited.length === 0) return
 
       // Log edited file summary

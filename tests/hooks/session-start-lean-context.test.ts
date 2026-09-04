@@ -93,8 +93,9 @@ describe("session-start — lean context: lessons loading", () => {
 
     expect(result).toHaveProperty("flowdeck_lessons_count")
     expect(result.flowdeck_lessons_count).toBeGreaterThanOrEqual(2)
-    expect(result.flowdeck_lessons).toContain("typecheck loop")
+    // P5: only the most recent lesson section is injected; the rest stays in review-lessons.
     expect(result.flowdeck_lessons).toContain("caching pitfall")
+    expect(result.flowdeck_lessons).not.toContain("typecheck loop")
   })
 
   it("returns null lessons when .flowdeck/lessons.md is absent", async () => {
@@ -328,7 +329,7 @@ describe("session-start — lean context: integration with lessons.md + rules", 
     expect(paths.some((p: string) => p.endsWith(".md"))).toBe(true)
   })
 
-  it("token budget includes lessons and rules bytes", async () => {
+  it("byte counts cover injected lessons and rules", async () => {
     const lessonsDir = join(dir, ".flowdeck")
     mkdirSync(lessonsDir, { recursive: true })
     const lessonsBody = "## 2024-01-01 — ts lesson\n**Lesson:** y\n\n"
@@ -340,9 +341,8 @@ describe("session-start — lean context: integration with lessons.md + rules", 
     )
 
     const result = await sessionStartHook({ directory: dir })
-    const budget = result.flowdeck_token_budget as Record<string, number>
-    expect(budget.total).toBe(120_000)
-    expect(budget.context).toBeGreaterThan(0)
+    // P5: the flat token-budget object is gone; byte-count fields remain.
+    expect(result.flowdeck_token_budget).toBeUndefined()
     expect(result.flowdeck_lessons_bytes).toBe(
       Buffer.byteLength(result.flowdeck_lessons as string, "utf-8"),
     )

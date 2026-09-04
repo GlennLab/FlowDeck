@@ -137,15 +137,27 @@ describe("plugin entry", () => {
     expect(threw).toBeNull()
   })
 
-  it("emits a minimal completion log from tool.execute.after", async () => {
+  it("gates the [tool] done log behind FLOWDECK_DEBUG", async () => {
     const client = createMockClient()
     const instance = await loadPlugin(client)
 
     const toolInput = { tool: "read", sessionID: "sess-1", args: { filePath: "x.ts" } }
-    await instance["tool.execute.after"]?.(toolInput, { args: { filePath: "x.ts" } })
 
-    const logCalls = (client.app.log as any).mock.calls
-    const doneLog = logCalls.find((call: any) => call[0]?.body?.message?.includes("[tool] done"))
+    // Absent by default.
+    await instance["tool.execute.after"]?.(toolInput, { args: { filePath: "x.ts" } })
+    let logCalls = (client.app.log as any).mock.calls
+    let doneLog = logCalls.find((call: any) => call[0]?.body?.message?.includes("[tool] done"))
+    expect(doneLog).toBeUndefined()
+
+    // Present with FLOWDECK_DEBUG set.
+    process.env.FLOWDECK_DEBUG = "1"
+    try {
+      await instance["tool.execute.after"]?.(toolInput, { args: { filePath: "x.ts" } })
+    } finally {
+      delete process.env.FLOWDECK_DEBUG
+    }
+    logCalls = (client.app.log as any).mock.calls
+    doneLog = logCalls.find((call: any) => call[0]?.body?.message?.includes("[tool] done"))
     expect(doneLog).toBeDefined()
     expect(doneLog[0].body.message).toMatch(/tool=read/)
     expect(doneLog[0].body.message).toMatch(/session=sess-1/)

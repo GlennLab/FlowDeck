@@ -17,6 +17,7 @@ import { existsSync, readFileSync } from "fs"
 import { join } from "path"
 import { createRequire } from "module"
 import { statePath } from "../tools/planning-state-lib"
+import { WORKFLOW_PHASES } from "../services/supervisor-binding"
 
 
 // Pull version from package.json at startup (zero runtime overhead)
@@ -73,13 +74,30 @@ function detectLanguages(root: string): string[] {
   return langs
 }
 
+/**
+ * Security L1: FLOWDECK_PHASE is injected into every bash execution's
+ * environment, so an untrusted STATE.md must not be able to smuggle control
+ * characters or shell metacharacters into it. Only accept a known phase name
+ * (WORKFLOW_PHASES) or a numeric phase (1-4); reject everything else.
+ */
+const NUMERIC_PHASES = new Set(["1", "2", "3", "4"])
+
+function isSafePhaseSlug(slug: string): boolean {
+  if (slug.length === 0 || slug.length > 32) return false
+  if (/[\u0000-\u001f\u007f]/.test(slug)) return false
+  const lower = slug.toLowerCase()
+  return (WORKFLOW_PHASES as readonly string[]).includes(lower) || NUMERIC_PHASES.has(lower)
+}
+
 function readCurrentPhase(root: string): string | undefined {
   const sp = statePath(root)
   if (!existsSync(sp)) return undefined
   try {
     const content = readFileSync(sp, "utf-8")
     const match = content.match(/phase:\s*(\S+)/i)
-    return match?.[1]
+    const slug = match?.[1]
+    if (!slug || !isSafePhaseSlug(slug)) return undefined
+    return slug
   } catch {
     return undefined
   }

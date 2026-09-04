@@ -1,4 +1,5 @@
 import { resolve } from "path"
+import { flowdeckError } from "../lib/flowdeck-message"
 
 export type LoopResult =
   | { action: "allow" }
@@ -472,6 +473,6 @@ export class LoopDetector {
     _reason: string
   ): string {
     const normalizedPreview = redactForDisplay(toolName, normalizedKey)
-    return `[FlowDeck Loop Guard] You already ran \`${normalizedPreview}\` and got the same result (status: ${status}, repeats: ${count}). Do NOT repeat it. Choose a different approach, inspect the tool behavior, or ask the human for guidance.`
+    return flowdeckError("loop-guard", `You already ran \`${normalizedPreview}\` and got the same result (status: ${status}, repeats: ${count}). Do NOT repeat it. Choose a different approach, inspect the tool behavior, or ask the human for guidance.`)
   }
 }
