@@ -74,7 +74,7 @@ Blockers:
 
 ## Error Handling
 
-- `~/.fd-plan/<slug>/` not found → `"No planning workspace. Run /fd-task to start."`
+- `~/.fd-plan/<slug>/` not found → `"No planning workspace. Run /fd-task first."`
 - `--topic` names a topic that does not exist → `"Topic '<topic>' not found."` followed
   by the available topics.
 - `checkpoint.json` unreadable → fall back to STATE.md and note the fallback in the

@@ -14,7 +14,6 @@ FlowDeck implements deep system hooks that react to OpenCode lifecycle events. T
 | `context-window-monitor` | `message.updated`, `tool.execute.after` | Warns when context usage exceeds 70% of the token limit |
 | `session-idle` | `session.idle` (when files edited) | Desktop notification and edits summary logging |
 | `notifications` | Various | Desktop notification dispatch |
-| `file-tracker` | During session | Tracks edited file paths across agent turns |
 
 ---
 
@@ -143,21 +142,7 @@ The warning fires once per session (tracked by `sessionID`).
 1. Sends a desktop notification via `notifySessionIdle()`
 2. Logs a session summary via `client.app.log` (up to 10 edited files, then `… and N more`)
 
-**State read:** In-memory `SessionFileTracker` (edited paths ring buffer).
-
----
-
-## `file-tracker`
-
-**File:** `src/hooks/file-tracker.ts`
-
-**When it runs:** Continuously during session, tracking every file path edited by agents.
-
-**What it does:**
-
-Maintains a ring buffer of edited file paths. Consumed by the `compaction` hook (recently edited files) and `session-idle` hook (edited summary).
-
-Implements a windowed snapshot of edited paths per session — consumed by compaction hook and idle hook.
+**State read:** Per-session written-file store in `tool-guard` (`getWrittenFiles`).
 
 ---
 
@@ -168,9 +153,7 @@ Implements a windowed snapshot of edited paths per session — consumed by compa
 | `approval-hook` | `approval-hook.ts` | Phase/project-level approval gates |
 | `decision-trace-hook` | `decision-trace-hook.ts` | Decision audit trail |
 | `telemetry-hook` | `telemetry-hook.ts` | Workflow telemetry |
-| `patch-trust` | `patch-trust.ts` | AI safety: patch trust scoring |
 | `tool-guard` | `tool-guard.ts` | Tool usage guardrails |
 | `auto-learn-hook` | `auto-learn-hook.ts` | Runtime policy learning |
-| `todo-hook` | `todo-hook.ts` | Todo tracking integration |
 
 These hooks are internal governance and safety mechanisms. The five hooks described above are the ones users interact with most directly.

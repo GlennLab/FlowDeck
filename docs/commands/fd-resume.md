@@ -20,7 +20,7 @@ Resume a previously interrupted FlowDeck session.
 2. **If `checkpoint.json` is missing, fall back to `STATE.md`.**
    - Read `topic`, `status`, `plan_confirmed`, `steps_complete`, `last_action`,
      `next_action` to reconstruct where the session stopped.
-   - If `STATE.md` is also missing, error: `"No planning workspace. Run /fd-task to start."`
+   - If `STATE.md` is also missing, error: `"No planning workspace. Run /fd-task first."`
 
 3. Read `STATE.md` to fill in anything `checkpoint.json` does not carry:
    `last_updated`, `plan_confirmed`, `steps_complete`.

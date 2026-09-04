@@ -1,6 +1,7 @@
 import { tool, type ToolDefinition } from "@opencode-ai/plugin"
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs"
 import { dirname } from "path"
+import { maskHomePath } from "../lib/flowdeck-message"
 import {
   statePath,
   topicPlanPath,
@@ -47,7 +48,7 @@ export const planningStateTool: ToolDefinition = tool({
     const sp = statePath(dir)
 
     if (!existsSync(sp)) {
-      return JSON.stringify({ error: "STATE.md not found. Initialize project first." })
+      return JSON.stringify({ error: "No planning workspace. Run /fd-task first." })
     }
 
     switch (args.action) {
@@ -58,7 +59,12 @@ export const planningStateTool: ToolDefinition = tool({
 
       case "update": {
         const u = args.updates
-        if (!u) return JSON.stringify({ error: "No updates provided" })
+        if (!u) {
+          return JSON.stringify({
+            error:
+              'No updates provided. Pass an updates object, e.g. {"phase": 3, "status": "in_progress", "last_action": "implemented step 1"} — supported keys: phase, topic, status, last_action, next_action, blockers, plan_file, plan_confirmed, confirmed_at, task_type, requires_design_first, design_stage, design_approved, design_override, design_override_reason, design_artifact, steps_complete, steps_pending.',
+          })
+        }
         let content = readFileSync(sp, "utf-8")
         const upsertLine = (current: string, key: string, value: string): string => {
           const pattern = new RegExp(`^${key}:\\s*.*$`, "m")
@@ -121,17 +127,18 @@ export const planningStateTool: ToolDefinition = tool({
           const activeTopic = topic ? slugifyTopic(topic) : resolveActiveTopic(dir)
           const fallback =
             explicitPlanFile ?? (activeTopic ? topicPlanPath(dir, activeTopic) : "(no topic — run /fd-task first)")
+          const masked = maskHomePath(fallback)
           return JSON.stringify({
-            error: `Plan file not found: ${fallback}`,
+            error: `Plan file not found: ${masked}`,
             topic: activeTopic,
-            plan_file: fallback,
+            plan_file: masked,
             resolved: false,
           })
         }
 
         return JSON.stringify({
           topic: topic ? slugifyTopic(topic) : resolveActiveTopic(dir),
-          plan_file: resolved.path,
+          plan_file: maskHomePath(resolved.path),
           resolved_from: resolved.source,
           is_explicit: resolved.isExplicit,
           content: readFileSync(resolved.path, "utf-8"),
@@ -166,7 +173,7 @@ export const planningStateTool: ToolDefinition = tool({
 
         return JSON.stringify({
           success: true,
-          plan_file: planPath,
+          plan_file: maskHomePath(planPath),
           topic,
           bytes: Buffer.byteLength(args.content, "utf-8"),
         })

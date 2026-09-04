@@ -12,7 +12,7 @@ force a save before closing a session.
 
 ## Steps
 
-1. Check `~/.fd-plan/<slug>/STATE.md` exists — if not, error: `"No planning workspace. Run /fd-task to start."`
+1. Check `~/.fd-plan/<slug>/STATE.md` exists — if not, error: `"No planning workspace. Run /fd-task first."`
 
 2. Read the current STATE.md and the existing `checkpoint.json` if present.
 

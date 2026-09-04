@@ -3,6 +3,7 @@ import { mkdirSync, rmSync, existsSync, writeFileSync } from "fs"
 import { basename, join } from "path"
 import type { ToolContext } from "@opencode-ai/plugin"
 import { captureLessonTool, reviewLessonsTool } from "@/tools/capture-lesson"
+import { maskHomePath } from "@/lib/flowdeck-message"
 
 // Isolated per-run cwd whose basename acts as the project tag for entries.
 const TMP = join(process.cwd(), ".test-tmp-lessons")
@@ -46,7 +47,7 @@ describe("capture-lesson tool", () => {
       makeCtx(),
     )
 
-    expect(result).toContain(LESSONS_FILE)
+    expect(result).toContain(maskHomePath(LESSONS_FILE))
     expect(existsSync(LESSONS_FILE)).toBe(true)
 
     const review = await reviewLessonsTool.execute({}, makeCtx())
@@ -138,7 +139,7 @@ describe("capture-lesson tool", () => {
       { context: "new lesson", mistake: "Mistake", lesson: "Lesson" },
       makeCtx(),
     )
-    expect(result).toContain(LESSONS_FILE)
+    expect(result).toContain(maskHomePath(LESSONS_FILE))
 
     const review = await reviewLessonsTool.execute({}, makeCtx())
     expect(review).toContain("new lesson")

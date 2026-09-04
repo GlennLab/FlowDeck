@@ -16,6 +16,7 @@ import { resolveActiveTopic, topicPlanPath, readPlanningState } from "../tools/p
 import { isUiHeavyTask } from "../lib/task-routing"
 import { loadFlowDeckConfig, resolveDesignFirstConfig } from "../config"
 import type { FlowDeckConfig } from "../config/schema"
+import { flowdeckError } from "../lib/flowdeck-message"
 import { validateToolAccess } from "../services/agent-validator"
 import { appendAuditEvent } from "../services/audit-log"
 import { verifyAfterWrite } from "../services/verification-layer"
@@ -39,7 +40,7 @@ function getFilePath(args: any): string | undefined {
 function checkBlockedPath(filePath: string, patterns: string[]): string | null {
   for (const p of patterns) {
     if (filePath.includes(p)) {
-      return `FLOWDECK: Writing to "${p}" is blocked.`
+      return flowdeckError("blocked-pattern", `Writing to "${p}" is blocked.`)
     }
   }
   return null
@@ -66,6 +67,10 @@ export function getWriteCount(sessionID: string): number {
   return sessionWrittenFiles.get(sessionID)?.size ?? 0
 }
 
+export function getWrittenFiles(sessionID: string): string[] {
+  return [...(sessionWrittenFiles.get(sessionID) ?? [])]
+}
+
 export function clearWriteCounter(sessionID: string): void {
   sessionWrittenFiles.delete(sessionID)
 }
@@ -77,15 +82,16 @@ export function checkWriteLimit(
 ): string | null {
   const files = sessionWrittenFiles.get(sessionID) ?? new Set()
   if (!files.has(filePath) && files.size >= maxWrites) {
-    return (
-      `[FlowDeck] Write limit reached: this agent has already modified ` +
-      `${files.size} unique files (configured max: ${maxWrites}).\n` +
-      `Modified so far: ${[...files].join(", ")}\n` +
-      `Stop now and report back to the orchestrator with:\n` +
-      `  1. What was completed\n` +
-      `  2. What files remain\n` +
-      `  3. Whether a second workstream is needed\n` +
-      `Do NOT continue editing more files without orchestrator confirmation.`
+    return flowdeckError(
+      "write-limit",
+      `Write limit reached: this agent has already modified ` +
+        `${files.size} unique files (configured max: ${maxWrites}).\n` +
+        `Modified so far: ${[...files].join(", ")}\n` +
+        `Stop now and report back to the orchestrator with:\n` +
+        `  1. What was completed\n` +
+        `  2. What files remain\n` +
+        `  3. Whether a second workstream is needed\n` +
+        `Do NOT continue editing more files without orchestrator confirmation.`
     )
   }
   return null
@@ -105,7 +111,7 @@ export function isBlocked(tool: string, args: any): BlockReason {
     if (!cmd) return null
     for (const p of BLOCKED_PATTERNS.bash) {
       if (cmd.includes(p)) {
-        return `FLOWDECK: Command containing "${p}" is blocked.`
+        return flowdeckError("blocked-pattern", `Command containing "${p}" is blocked.`)
       }
     }
     return null
@@ -115,7 +121,7 @@ export function isBlocked(tool: string, args: any): BlockReason {
     if (!filePath) return null
     for (const p of BLOCKED_PATTERNS.read) {
       if (filePath.includes(p)) {
-        return `FLOWDECK: Access to "${p}" files is blocked.`
+        return flowdeckError("blocked-pattern", `Access to "${p}" files is blocked.`)
       }
     }
     return null
@@ -151,7 +157,7 @@ export function checkArchConstraint(directory: string, filePath: string): BlockR
     for (const line of match[1].split("\n")) {
       const pattern = line.replace(/^-\s*/, "").split("#")[0].trim()
       if (pattern && filePath.includes(pattern)) {
-        return `FLOWDECK [arch-constraint]: editing "${pattern}" is forbidden by ~/.fd-plan/<slug>/.codebase/CONSTRAINTS.md`
+        return flowdeckError("arch-constraint", `editing "${pattern}" is forbidden by ~/.fd-plan/<slug>/.codebase/CONSTRAINTS.md`)
       }
     }
   } catch { /* skip */ }
@@ -170,13 +176,13 @@ export function checkPhaseEnforcement(directory: string): BlockReason {
     // Block write/edit if in phase 1 or 2
     if (state.phase > 0 && state.phase < 3) {
       if (state.plan_confirmed) return null
-      return `FLOWDECK [phase-gate]: writing to codebase is blocked in phase ${state.phase} (${state.phase === 1 ? "task" : "review"}). Complete /fd-task and /fd-review to enter the execute phase.`
+      return flowdeckError("phase-gate", `writing to codebase is blocked in phase ${state.phase} (${state.phase === 1 ? "task" : "review"}). Complete /fd-task and /fd-review to enter the execute phase.`)
     }
     if (flowdeckConfig.enabled && flowdeckConfig.requireApprovalBeforeImplementation && isUiDesignApprovalRequired(directory)) {
       if (flowdeckConfig.enforcement === "advisory") {
-        return `FLOWDECK [design-gate]: advisory design-first mode detected missing approval. Approve the design in /fd-review or set design_override=true in STATE.md.`
+        return flowdeckError("design-gate", `advisory design-first mode detected missing approval. Approve the design in /fd-review or set design_override=true in STATE.md.`)
       }
-      return `FLOWDECK [design-gate]: UI-heavy task requires approved design handoff before implementation. Capture the design in architecture.md via /fd-task, approve it in /fd-review so design_stage=handoff_complete + design_approved=true, or set explicit design_override with reason.`
+      return flowdeckError("design-gate", `UI-heavy task requires approved design handoff before implementation. Capture the design in architecture.md via /fd-task, approve it in /fd-review so design_stage=handoff_complete + design_approved=true, or set explicit design_override with reason.`)
     }
   } catch {
     // If STATE.md doesn't exist or is invalid, don't block
@@ -251,10 +257,11 @@ export function checkTDDEnforcement(directory: string, filePath: string): BlockR
     if (isTestFile(filePath)) return null
     // Exempt file types
     if (isExemptFromTDD(filePath)) return null
-    return (
-      `[TDD Guard] Cannot write production code before a failing test exists.\n` +
-      `Current stage: behavior\n` +
-      `Required: write a failing test first, then implement.`
+    return flowdeckError(
+      "tdd-guard",
+      `Cannot write production code before a failing test exists.\n` +
+        `Current stage: behavior\n` +
+        `Required: write a failing test first, then implement.`
     )
   } catch {
     // If STATE.md doesn't exist or is invalid, don't block
@@ -386,7 +393,7 @@ export async function toolGuardHook(
     const validation = validateToolAccess(ctx.directory, agentName, toolName)
     const hasBlockViolation = validation.violations.some((v) => v.severity === "block")
     if (validation.action === "block" || hasBlockViolation) {
-      const msg = validation.message ?? `FLOWDECK: Agent ${agentName} is not permitted to use ${toolName}`
+      const msg = validation.message ?? flowdeckError("agent-permission", `Agent ${agentName} is not permitted to use ${toolName}`)
       decision.allowed = false
       decision.reason = msg
       logDecision(ctx, decision, { sessionID, agent: agentName, tool: toolName })

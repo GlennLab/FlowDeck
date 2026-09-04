@@ -19,6 +19,7 @@ import { join } from "path"
 
 import { planningStateTool } from "@/tools/planning-state"
 import { statePath, topicPlanPath, topicDir, planningDir } from "@/tools/planning-state-lib"
+import { maskHomePath } from "@/lib/flowdeck-message"
 
 interface TestContext {
   directory: string
@@ -103,7 +104,8 @@ describe("planning-state tool: read_plan with quoted plan_file", () => {
     const v = result.value as { plan_file?: string; resolved_from?: string; topic?: string }
     expect(v.topic).toBe("add-oauth")
     expect(v.resolved_from).toBe("topic_plan")
-    expect(v.plan_file).toBe(plan)
+    // M3: home paths are masked to ~/... in tool output.
+    expect(v.plan_file).toBe(maskHomePath(plan))
   })
 
   it("read_plan does NOT include quotes in the resolved path when plan_file is quoted", async () => {
@@ -218,9 +220,11 @@ describe("planning-state tool: write_plan", () => {
 
     expect(v.success).toBe(true)
     expect(v.topic).toBe("add-oauth")
-    expect(v.plan_file).toBe(topicPlanPath(dir, "add-oauth"))
-    expect(existsSync(v.plan_file!)).toBe(true)
-    expect(readFileSync(v.plan_file!, "utf-8")).toBe(content)
+    // M3: home paths are masked to ~/... in tool output; FS checks use the
+    // unmasked path the tool actually wrote.
+    expect(v.plan_file).toBe(maskHomePath(topicPlanPath(dir, "add-oauth")))
+    expect(existsSync(topicPlanPath(dir, "add-oauth"))).toBe(true)
+    expect(readFileSync(topicPlanPath(dir, "add-oauth"), "utf-8")).toBe(content)
     expect(v.bytes).toBe(Buffer.byteLength(content, "utf-8"))
   })
 
@@ -229,8 +233,8 @@ describe("planning-state tool: write_plan", () => {
     const result = await callTool({ action: "write_plan", content: "x" }, dir)
     expect(result.ok).toBe(true)
     const v = result.value as { plan_file?: string }
-    expect(v.plan_file).toMatch(/^\//)
-    expect(v.plan_file).toBe(topicPlanPath(dir, "add-oauth"))
+    expect(v.plan_file).toMatch(/^~\//)
+    expect(v.plan_file).toBe(maskHomePath(topicPlanPath(dir, "add-oauth")))
   })
 
   it("updates STATE.md plan_file and topic to the resolved path", async () => {
@@ -267,8 +271,8 @@ describe("planning-state tool: write_plan", () => {
     expect(explicit.ok).toBe(true)
     const ev = explicit.value as { plan_file?: string; topic?: string }
     expect(ev.topic).toBe("cache-invalidation")
-    expect(ev.plan_file).toBe(topicPlanPath(dir, "cache-invalidation"))
-    expect(existsSync(ev.plan_file!)).toBe(true)
+    expect(ev.plan_file).toBe(maskHomePath(topicPlanPath(dir, "cache-invalidation")))
+    expect(existsSync(topicPlanPath(dir, "cache-invalidation"))).toBe(true)
 
     // No explicit topic → fall back to STATE (which write_plan just updated).
     const fallback = await callTool({ action: "write_plan", content: "fallback" }, dir)

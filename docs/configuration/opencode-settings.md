@@ -60,7 +60,6 @@ System hooks that react to OpenCode lifecycle events:
 | `context-window-monitor.ts` | `message.updated`, `tool.execute.after` | Warns when context usage exceeds 70% of the token limit |
 | `session-idle-hook.ts` | `session.idle` (when files edited) | Sends desktop notification and logs edited file summary |
 | `notifications.ts` | Various | Desktop notification dispatch |
-| `file-tracker.ts` | During session | Tracks edited file paths across agent turns |
 
 ### `src/skills/`
 
