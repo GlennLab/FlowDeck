@@ -11,9 +11,6 @@ import {
 
 const MAX_FIELD_LENGTH = 200
 
-/** Tokens recognized as the verb in an `affect.md` entry line. */
-const RECOGNIZED_VERBS = new Set(["create", "modify", "delete"])
-
 /**
  * Read `affect.md` and return every bullet under `## Affected Files`.
  *
@@ -73,23 +70,21 @@ function parseAffect(
       continue
     }
 
-    const spaceIdx = body.indexOf(" ")
-    if (spaceIdx < 0) {
-      errors.push(`line ${i + 1}: malformed entry (expected '<verb> <path>')`)
+    const match = AFFECTED_FILE_LINE.exec(line)
+    if (!match) {
+      // Same shape but an unrecognized verb → a more precise error than "malformed".
+      const loose = AFFECT_ENTRY_ANY_VERB.exec(line)
+      if (loose) {
+        errors.push(`line ${i + 1}: unknown verb '${loose[1]}' (expected create|modify|delete)`)
+      } else {
+        errors.push(`line ${i + 1}: malformed entry (expected '<path> (verb)')`)
+      }
       continue
     }
 
-    const verb = body.slice(0, spaceIdx).toLowerCase()
-    const path = body.slice(spaceIdx + 1).trim()
+    const path = match[1].trim()
+    const verb = match[2]
 
-    if (!path) {
-      errors.push(`line ${i + 1}: missing path`)
-      continue
-    }
-    if (!RECOGNIZED_VERBS.has(verb)) {
-      errors.push(`line ${i + 1}: unknown verb '${verb}' (expected create|modify|delete)`)
-      continue
-    }
     if (path.includes("..")) {
       errors.push(`line ${i + 1}: path '${path}' contains '..' (refused)`)
       continue
@@ -110,8 +105,15 @@ function parseAffect(
 /** Accepted values under `## Risk Level` in `affect.md`. */
 const RISK_LEVELS = new Set(["low", "medium", "high"])
 
-/** `- path/to/file.ts (modify)` — a path followed by a parenthesized verb. */
-const AFFECTED_FILE_LINE = /^-\s+\S.*\((?:modify|create|delete)\)$/
+/**
+ * `- path/to/file.ts (modify)` — a path followed by a parenthesized verb.
+ * Shared by the artifacts check and `parseAffect` so both accept exactly
+ * the same entry format.
+ */
+const AFFECTED_FILE_LINE = /^-\s+(\S.*?)\s+\((modify|create|delete)\)$/
+
+/** Same shape as `AFFECTED_FILE_LINE` but any verb — used for error messages only. */
+const AFFECT_ENTRY_ANY_VERB = /^-\s+\S.*\s+\(([^()]+)\)$/
 
 /** `## Wave 1` — a plan.md wave heading. */
 const WAVE_HEADING = /^##\s+Wave\s+\d+/i

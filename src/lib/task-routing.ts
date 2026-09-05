@@ -75,12 +75,31 @@ const NON_UI_KEYWORDS = [
   "worker",
 ]
 
+/** Escape a keyword for safe use inside a RegExp. */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+/**
+ * Word-boundary patterns for the keyword lists. Plain substring matching
+ * false-positives on words that merely contain a keyword (e.g. the Dutch
+ * "uitzondering" contains "ui").
+ */
+const UI_HEAVY_PATTERNS = UI_HEAVY_KEYWORDS.map(
+  (keyword) => new RegExp(`\\b${escapeRegExp(keyword)}\\b`),
+)
+const NON_UI_PATTERNS = NON_UI_KEYWORDS.map(
+  (keyword) => new RegExp(`\\b${escapeRegExp(keyword)}\\b`),
+)
+const FRONTEND_PATTERN = /\bfrontend\b/
+
 export function isUiHeavyTask(input: string): boolean {
   const normalized = input.trim().toLowerCase()
   if (!normalized) return false
-  const hasUiSignal = UI_HEAVY_KEYWORDS.some((keyword) => normalized.includes(keyword))
+  const hasUiSignal = UI_HEAVY_PATTERNS.some((pattern) => pattern.test(normalized))
   if (!hasUiSignal) return false
-  const hasOnlyNonUiSignals = NON_UI_KEYWORDS.some((keyword) => normalized.includes(keyword)) && !normalized.includes("frontend")
+  const hasNonUiSignal = NON_UI_PATTERNS.some((pattern) => pattern.test(normalized))
+  const hasOnlyNonUiSignals = hasNonUiSignal && !FRONTEND_PATTERN.test(normalized)
   return !hasOnlyNonUiSignals
 }
 

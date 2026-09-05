@@ -33,7 +33,7 @@ function writeValidTopic() {
   const planPath = topicPlanPath(TMP, "test-topic")
   mkdirSync(dirname(taskPath), { recursive: true })
   writeFileSync(taskPath, "# task\n", "utf-8")
-  writeFileSync(affectPath, "## Affected Files\n- create src/new.ts\n", "utf-8")
+  writeFileSync(affectPath, "## Affected Files\n- src/new.ts (create)\n", "utf-8")
   writeFileSync(planPath, "# plan\n", "utf-8")
   return dirname(taskPath)
 }
@@ -102,7 +102,7 @@ describe("fdx-validate tool", () => {
     writeValidTopic()
     writeFileSync(
       topicAffectPath(TMP, "test-topic"),
-      "## Affected Files\n- modify src/does-not-exist.ts\n",
+      "## Affected Files\n- src/does-not-exist.ts (modify)\n",
       "utf-8",
     )
     const result = await ffx_validate()
@@ -121,7 +121,7 @@ describe("fdx-validate tool", () => {
     writeFileSync(join(TMP, "src.ts"), "// exists", "utf-8")
     writeFileSync(
       topicAffectPath(TMP, "test-topic"),
-      "## Affected Files\n- modify src.ts\n",
+      "## Affected Files\n- src.ts (modify)\n",
       "utf-8",
     )
     const result = await ffx_validate()
@@ -132,7 +132,7 @@ describe("fdx-validate tool", () => {
     writeValidTopic()
     writeFileSync(
       topicAffectPath(TMP, "test-topic"),
-      "## Affected Files\n- modify ../../etc/passwd\n",
+      "## Affected Files\n- ../../etc/passwd (modify)\n",
       "utf-8",
     )
     const result = await ffx_validate()
@@ -144,7 +144,7 @@ describe("fdx-validate tool", () => {
     writeValidTopic()
     writeFileSync(
       topicAffectPath(TMP, "test-topic"),
-      "## Affected Files\n- frobnicate src/foo.ts\n",
+      "## Affected Files\n- src/foo.ts (frobnicate)\n",
       "utf-8",
     )
     const result = await ffx_validate()
@@ -157,7 +157,7 @@ describe("fdx-validate tool", () => {
     writeFileSync(absoluteFile, "// exists", "utf-8")
     writeFileSync(
       topicAffectPath(TMP, "test-topic"),
-      `## Affected Files\n- modify ${absoluteFile}\n`,
+      `## Affected Files\n- ${absoluteFile} (modify)\n`,
       "utf-8",
     )
     const result = await ffx_validate()
@@ -233,6 +233,36 @@ describe("fdx-validate artifacts action", () => {
     writeArtifacts()
     const result = await validateArtifacts()
     expect(result).toEqual({ valid: true, errors: [] })
+  })
+
+  it("affect.md in '- path (verb)' format passes both artifacts and pre-execute", async () => {
+    // VALID_AFFECT uses the canonical '- <path> (verb)' entry format.
+    writeArtifacts()
+    mkdirSync(join(TMP, "src"), { recursive: true })
+    writeFileSync(join(TMP, "src", "widget.ts"), "// exists\n", "utf-8")
+
+    const preExecute = await fdxValidateTool.execute(
+      { action: "pre-execute", topic: "test-topic" },
+      ctx,
+    )
+    expect(preExecute).toContain("OK:")
+
+    const artifacts = await validateArtifacts()
+    expect(artifacts).toEqual({ valid: true, errors: [] })
+  })
+
+  it("verb-first affect entries are rejected by pre-execute (format aligned to '- path (verb)')", async () => {
+    writeValidTopic()
+    writeFileSync(
+      topicAffectPath(TMP, "test-topic"),
+      "## Affected Files\n- modify src.ts\n",
+      "utf-8",
+    )
+    const result = await fdxValidateTool.execute(
+      { action: "pre-execute", topic: "test-topic" },
+      ctx,
+    )
+    expect(result).toContain("malformed entry")
   })
 
   it("task.md missing ## Requirements is reported", async () => {
