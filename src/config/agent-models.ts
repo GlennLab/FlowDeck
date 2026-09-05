@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "fs"
 import { join } from "path"
 import { homedir } from "os"
 import type { FlowDeckConfig, GovernanceConfig } from "./schema"
+import { validateFlowDeckConfig } from "./validator"
 
 export type { FlowDeckConfig } from "./schema"
 
@@ -81,7 +82,7 @@ export function stripJsonComments(content: string): string {
   return result
 }
 
-const VALID_CONFIG_KEYS: (keyof FlowDeckConfig)[] = [
+export const VALID_CONFIG_KEYS: (keyof FlowDeckConfig)[] = [
   "agentModels",
   "agents",
   "maxDelegationDepth",
@@ -104,6 +105,14 @@ function sanitizeConfig(parsed: unknown): FlowDeckConfig {
   return sanitized
 }
 
+export interface LoadFlowDeckConfigOptions {
+  /**
+   * Called when a successfully parsed config has shape errors.
+   * Never throws out of the loader; the sanitized config is still returned.
+   */
+  onInvalid?: (configPath: string, errors: string[]) => void
+}
+
 /**
  * Load FlowDeck configuration from the first available location.
  *
@@ -115,8 +124,13 @@ function sanitizeConfig(parsed: unknown): FlowDeckConfig {
  *   5. global ~/.config/opencode/flowdeck.json
  *
  * Malformed files are silently skipped to preserve no-stdout behavior.
+ * Shape errors in an otherwise parseable file are reported via
+ * options.onInvalid (when provided); the sanitized config is still returned.
  */
-export function loadFlowDeckConfig(directory?: string): FlowDeckConfig {
+export function loadFlowDeckConfig(
+  directory?: string,
+  options?: LoadFlowDeckConfigOptions,
+): FlowDeckConfig {
   const candidates: string[] = []
 
   if (directory) {
@@ -132,7 +146,12 @@ export function loadFlowDeckConfig(directory?: string): FlowDeckConfig {
     try {
       const raw = readFileSync(configPath, "utf-8")
       const stripped = configPath.endsWith(".jsonc") ? stripJsonComments(raw) : raw
-      return sanitizeConfig(JSON.parse(stripped))
+      const parsed = JSON.parse(stripped)
+      const errors = validateFlowDeckConfig(parsed)
+      if (errors.length > 0 && options?.onInvalid) {
+        options.onInvalid(configPath, errors)
+      }
+      return sanitizeConfig(parsed)
     } catch {
       // Malformed config — try next candidate or return default.
     }
