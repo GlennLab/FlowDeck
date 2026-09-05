@@ -10,14 +10,15 @@ const IS_ENABLED = () =>
   process.env.FLOWDECK_TOOL_GUARD_ENABLED !== "off"
 
 import { existsSync, readFileSync } from "fs"
-import { join } from "path"
+import { homedir } from "os"
+import { join, resolve } from "path"
 import { codebaseDir } from "../tools/codebase-state"
 import { resolveActiveTopic, topicPlanPath, readPlanningState } from "../tools/planning-state-lib"
 import { isUiHeavyTask } from "../lib/task-routing"
 import { loadFlowDeckConfig, resolveDesignFirstConfig } from "../config"
 import type { FlowDeckConfig } from "../config/schema"
 import { flowdeckError } from "../lib/flowdeck-message"
-import { validateToolAccess } from "../services/agent-validator"
+import { resolveValidatorMode, validateToolAccess, validateToolCall } from "../services/agent-validator"
 import { appendAuditEvent } from "../services/audit-log"
 import { verifyAfterWrite } from "../services/verification-layer"
 
@@ -56,6 +57,58 @@ const WRITE_TOOLS = new Set([
   "str-replace", "str_replace", "str_replace_editor",
   "create", "create_file",
 ])
+
+/** Root of the global planning store: ~/.fd-plan/<slug>/ (outside the repo). */
+const PLANNING_ROOT = join(homedir(), ".fd-plan")
+
+/**
+ * Agents whose write restriction targets project source only. Their writes
+ * under ~/.fd-plan/ (planning artifacts) are carved out of the contract
+ * check by path, not by tool name (R-04).
+ */
+const PLANNING_WRITER_AGENTS = new Set(["orchestrator", "planner", "mapper"])
+
+function isPlanningArtifactPath(filePath: string | undefined): boolean {
+  if (!filePath) return false
+  // Expand a leading "~/", then collapse lexical ".." segments via
+  // path.resolve BEFORE the prefix test, so traversal paths like
+  // "~/.fd-plan/../../src/x.ts" cannot masquerade as planning artifacts.
+  const expanded =
+    filePath === "~" || filePath.startsWith("~/")
+      ? join(homedir(), filePath.slice(1))
+      : filePath
+  const resolved = resolve(expanded)
+  return resolved === PLANNING_ROOT || resolved.startsWith(PLANNING_ROOT + "/")
+}
+
+/**
+ * R-04 path carve-out: a write action by a planning-artifact writer
+ * (orchestrator/planner/mapper) targeting ~/.fd-plan/ is not a contract
+ * violation. Path-based, not a tool-name special case.
+ */
+function isPlanningArtifactExempt(agent: string, toolName: string, args: any): boolean {
+  return (
+    PLANNING_WRITER_AGENTS.has(agent) &&
+    WRITE_TOOLS.has(toolName) &&
+    isPlanningArtifactPath(getFilePath(args))
+  )
+}
+
+type ContractEnforcement = "off" | "warn" | "strict"
+
+/**
+ * Resolve the contract-enforcement level for a directory.
+ * `resolveValidatorMode() === "off"` is the master off-switch. An explicit
+ * `governance.validator.contractEnforcement` wins; otherwise the level is
+ * derived from the validator mode (strict → strict, advisory → warn).
+ */
+function resolveContractEnforcement(directory: string): ContractEnforcement {
+  const mode = resolveValidatorMode(directory)
+  if (mode === "off") return "off"
+  const explicit = loadFlowDeckConfig(directory).governance?.validator?.contractEnforcement
+  if (explicit) return explicit
+  return mode === "strict" ? "strict" : "warn"
+}
 
 export function recordWrite(sessionID: string, filePath: string): void {
   const files = sessionWrittenFiles.get(sessionID) ?? new Set()
@@ -392,12 +445,45 @@ export async function toolGuardHook(
     decision.checks.push("agent-contract")
     const validation = validateToolAccess(ctx.directory, agentName, toolName)
     const hasBlockViolation = validation.violations.some((v) => v.severity === "block")
-    if (validation.action === "block" || hasBlockViolation) {
+    // R-04: planning-artifact writes under ~/.fd-plan/ are exempt.
+    if (!isPlanningArtifactExempt(agentName, toolName, args) && (validation.action === "block" || hasBlockViolation)) {
       const msg = validation.message ?? flowdeckError("agent-permission", `Agent ${agentName} is not permitted to use ${toolName}`)
       decision.allowed = false
       decision.reason = msg
       logDecision(ctx, decision, { sessionID, agent: agentName, tool: toolName })
       throw new Error(msg)
+    }
+  }
+
+  // Contract enforcement (LE-1 Wave 2): normalized tool-name contract check.
+  // Runs AFTER the hard pattern blocks and validateToolAccess so their
+  // meaning and order are unchanged (R-05).
+  if (agentName && typeof agentName === "string") {
+    const enforcement = resolveContractEnforcement(ctx.directory)
+    if (enforcement !== "off") {
+      const verdict = validateToolCall(agentName, toolName)
+      if (!verdict.allowed && !isPlanningArtifactExempt(agentName, toolName, args)) {
+        decision.checks.push("contract-enforcement")
+        if (enforcement === "strict" && verdict.severity === "block") {
+          const msg = flowdeckError(
+            "contract-enforcement",
+            `Agent "${agentName}" is not permitted to use tool "${toolName}" (contract rule: ${verdict.reason})`,
+          )
+          decision.allowed = false
+          decision.reason = msg
+          logDecision(ctx, decision, { sessionID, agent: agentName, tool: toolName })
+          throw new Error(msg)
+        }
+        appendAuditEvent(ctx.directory, {
+          kind: "guard.warn",
+          session_id: sessionID,
+          agent: agentName,
+          tool: toolName,
+          decision: "warn",
+          reason: verdict.reason,
+          details: { checks: decision.checks, severity: verdict.severity },
+        })
+      }
     }
   }
 

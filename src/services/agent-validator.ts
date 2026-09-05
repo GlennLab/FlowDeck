@@ -4,7 +4,7 @@
  * Returns a decision (allow/warn/block/escalate).
  */
 
-import { getContract } from "./agent-contract-registry"
+import { getContract, getAllContracts } from "./agent-contract-registry"
 import { loadFlowDeckConfig } from "../config"
 
 export type ValidatorMode = "off" | "advisory" | "strict"
@@ -164,4 +164,82 @@ export function validateToolAccess(
   opts: { run_id?: string; session_id?: string } = {},
 ): ValidationResult {
   return validateAgent(directory, { agent, toolUsed: toolName, ...opts })
+}
+
+/**
+ * Alias tool names (as they appear in prompts and orchestrator messages)
+ * mapped to the canonical names used in contracts.
+ */
+const TOOL_NAME_ALIASES: Record<string, string> = {
+  write_file: "write",
+  edit_file: "edit",
+  apply_patch: "patch",
+  str_replace_editor: "edit",
+  create_file: "write",
+  read_file: "read",
+}
+
+/**
+ * Every tool name the system recognizes: alias keys plus every tool named in
+ * any contract's allowedTools. Used to tell "unknown tool" (warn, never
+ * block) apart from "known tool this agent may not use" (contract violation).
+ */
+const KNOWN_TOOLS: ReadonlySet<string> = new Set([
+  ...Object.keys(TOOL_NAME_ALIASES),
+  ...getAllContracts().flatMap((c) => c.allowedTools),
+])
+
+/**
+ * Map an alias tool name to its canonical contract name.
+ * Unknown names are returned unchanged.
+ */
+export function normalizeToolName(tool: string): string {
+  return TOOL_NAME_ALIASES[tool] ?? tool
+}
+
+export interface ToolCallVerdict {
+  allowed: boolean
+  reason: string
+  severity: ValidationViolation["severity"]
+}
+
+/**
+ * Pure contract check for a single tool call: no config read, no audit write.
+ *
+ * - tool in the agent's allowedTools (after alias normalization) → allow
+ * - tool named in (or matching) a forbiddenAction → "tool-not-in-contract",
+ *   block — checked before the unknown-tool branch so forbidden-only tools
+ *   (e.g. "patch", "create") agree with the legacy validateToolAccess path
+ * - tool unknown to the system → warn "unknown-tool", never block (R-06)
+ * - known tool outside the contract → "tool-not-in-contract", warn
+ *
+ * Enforcement (strict/warn/off) is applied by the caller via
+ * `resolveValidatorMode`; this function only reports the violation.
+ */
+export function validateToolCall(agent: string, tool: string): ToolCallVerdict {
+  const contract = getContract(agent)
+  if (!contract) {
+    return { allowed: true, reason: "no-contract", severity: "info" }
+  }
+
+  const name = normalizeToolName(tool)
+  if (contract.allowedTools.includes(name)) {
+    return { allowed: true, reason: "allowed", severity: "info" }
+  }
+
+  // Same bidirectional substring test as the legacy validateToolAccess path.
+  // A tool matching a forbiddenAction is a known tool this agent may not use,
+  // so it is a contract violation (block) — not an unknown tool (warn).
+  const toolForbidden = contract.forbiddenActions.some(
+    fa => name.includes(fa) || fa.includes(name),
+  )
+  if (toolForbidden) {
+    return { allowed: false, reason: "tool-not-in-contract", severity: "block" }
+  }
+
+  if (!KNOWN_TOOLS.has(tool) && !KNOWN_TOOLS.has(name)) {
+    return { allowed: false, reason: "unknown-tool", severity: "warn" }
+  }
+
+  return { allowed: false, reason: "tool-not-in-contract", severity: "warn" }
 }

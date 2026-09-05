@@ -91,6 +91,22 @@ In `advisory` mode, a violation produces a warning in the session log:
 [flowdeck/validator] Agent 'coder' called forbidden tool 'deleteFile'
 ```
 
+#### `contractEnforcement` — Contract Tool-Call Enforcement
+
+> **Default:** derived from `mode` — `strict` → `strict`, `advisory` → `warn`. An explicit value takes precedence; `mode: "off"` is the master off-switch.
+
+Master switch for contract enforcement in the tool guard. It controls how the guard treats tool-calls that violate an agent's capability contract:
+
+| Value | Behavior |
+|-------|----------|
+| `off` | The normalized contract check and its contract audit events are disabled. The separate legacy `validateToolAccess` path still runs and blocks block-severity violations |
+| `warn` | Disallowed tool-calls pass through; a `guard.warn` event is written to the audit log |
+| `strict` | Disallowed tool-calls are blocked before execution; a `guard.block` event is written to the audit log |
+
+In `strict` mode only block-severity contract violations are blocked; unknown tool names always produce a `guard.warn` event and are never blocked. Contract events are appended to `~/.fd-plan/<slug>/.codebase/AUDIT.jsonl`.
+
+`contractEnforcement` controls only the normalized contract check (`validateToolCall`) and its `guard.block`/`guard.warn` events. The legacy `validateToolAccess` agent-contract path is separate: it runs whenever the validator `mode` is not `off` and blocks block-severity violations regardless of `contractEnforcement`.
+
 ### `delegationBudget` — Per-Run Resource Limits
 
 | Field | Type | Description |
