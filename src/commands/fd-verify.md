@@ -60,11 +60,12 @@ Log any dependent that `affect.md` missed — that is a planning gap worth recor
 - Test coverage ≥ 80% for changed files — below that is a HIGH finding
 - Any `override_log` entries from `/fd-execute --override`
 
-**Security scan (@security-auditor)**:
-- No hardcoded secrets
-- Input validation at trust boundaries
-- Auth/authz on protected routes
-- No CRITICAL or HIGH vulnerabilities
+**Security scan (@security-auditor + `security-scan` skill)** — load the
+`security-scan` skill and run its full checklist over the diff since the task
+began: secret detection, injection checks (SQL/command/XSS), auth/authz on
+protected routes, dependency CVE scan via the project's audit command, OWASP
+Top 10. Use the skill's PASS/FAIL verdict in the report; findings MUST include
+file:line references.
 
 ## Step 5: Report
 
@@ -92,6 +93,7 @@ Verdict: ✅ VERIFIED | ❌ NOT VERIFIED
 - A CRITICAL security vulnerability
 - A CRITICAL code-review finding
 - An affected file with no test coverage
+- security-scan skill was not run (verdict missing)
 
 ## Step 6: Go / No-Go
 

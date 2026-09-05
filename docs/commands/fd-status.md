@@ -1,6 +1,6 @@
 ---
 description: Show the current pipeline stage, artifact status, and blockers for the active topic
-argument-hint: [--topic=<slug> | --all]
+argument-hint: [--topic=<slug> | --all] [--format=<text|json>]
 ---
 
 # Status
@@ -9,6 +9,11 @@ Show where the current task sits in the pipeline and what is blocking it.
 
 **Input:** $ARGUMENTS — optional `--topic=<slug>` for a specific topic, `--all` to list
 every topic in the project.
+
+## Options
+
+- `--format=<text|json>` — output format (default `text`). With `--all`, json
+  outputs an array of topic objects.
 
 ## Default: active topic
 
@@ -71,6 +76,32 @@ Blockers:
   ❌ affect.md missing            → run /fd-task
   ❌ verification failed: 2 tests → run /fd-execute, then /fd-verify
 ```
+
+## JSON output
+
+With `--format json`, print a single JSON object on stdout and nothing else.
+Errors go to stderr and exit with code 1.
+
+```json
+{
+  "project": "<slug>",
+  "topic": "<topic>",
+  "stage": "<current_command>",
+  "stage_status": "<current_stage>",
+  "artifacts": { "task": true, "affect": true, "plan": true, "architecture": true },
+  "blockers": [],
+  "saved_at": "<ISO timestamp>"
+}
+```
+
+- `stage` = `checkpoint.json` `current_command`; `stage_status` = `current_stage`;
+  `saved_at` = `checkpoint.json` `saved_at` (fallback: STATE.md).
+- `artifacts` booleans from file existence under `~/.fd-plan/<slug>/<topic>/`
+  (architecture.md at slug level).
+- No `phases` field: `checkpoint.json` `phases` is a wave-number→status map, not
+  a pipeline-stage map — `stage` + `stage_status` + `artifacts` describe the state
+  without derivation ambiguity.
+- With `--all`: `{"project": "<slug>", "topics": [ <one object per topic> ]}`.
 
 ## Examples
 

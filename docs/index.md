@@ -8,7 +8,7 @@ FlowDeck structures every feature through an **adaptive workflow cycle**. The or
 
 - **12 agents** — orchestrator, planner, architect, backend-coder, frontend-coder, devops, mapper, tester, reviewer, researcher, security-auditor, debug-specialist
 - **42 skills** — reusable workflow patterns (TDD, security scan, code review, planning, and more)
-- **8 commands** — slash-command entry points for the task pipeline: `/fd-task`, `/fd-review`, `/fd-execute`, `/fd-verify`, `/fd-done`, with `/fd-checkpoint`, `/fd-resume`, `/fd-status` for support
+- **9 commands** — slash-command entry points for the task pipeline: `/fd-task`, `/fd-review`, `/fd-execute`, `/fd-verify`, `/fd-done`, with `/fd-checkpoint`, `/fd-init`, `/fd-resume`, `/fd-status` for support
 - **Adaptive workflow routing** — scores tasks across 5 dimensions and selects the minimal sufficient workflow class
 - **Persistent state** — resume exactly where you left off across sessions via `~/.fd-plan/<slug>/STATE.md` and `~/.fd-plan/<slug>/checkpoint.json`
 - **Parallel execution** — independent tasks run simultaneously through the orchestrator
@@ -35,6 +35,7 @@ FlowDeck structures every feature through an **adaptive workflow cycle**. The or
 | `/fd-checkpoint` | Force-save session state to `checkpoint.json` and `STATE.md` (normally automatic on `session.idle`) |
 | `/fd-resume` | Restore `checkpoint.json` (falling back to `STATE.md`), PAUSE for confirmation, continue the recorded command and stage |
 | `/fd-status` | Show the current pipeline stage, artifact status, and blockers for the active topic |
+| `/fd-init` | Initialize `~/.fd-plan/<slug>/` — STATE.md, config.json, codebase graph, and architecture.md — without starting a task |
 
 See [Commands](commands/) for full command documentation.
 

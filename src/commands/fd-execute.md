@@ -1,6 +1,6 @@
 ---
 description: Implement plan.md with the TDD pipeline — parallel worktree guard from affect.md, wave-based execution, checkpoint after each wave
-argument-hint: [--topic=<slug>] [--override] [--keep-worktree]
+argument-hint: [--topic=<slug>] [--override] [--keep-worktree] [--dry-run]
 ---
 
 # Execute
@@ -9,7 +9,7 @@ Implement the confirmed plan using the FlowDeck TDD agent pipeline.
 
 **Input:** $ARGUMENTS — optional `--topic=<slug>` to target a topic other than the
 active one, `--override` to bypass guards, `--keep-worktree` to skip worktree cleanup
-after merge.
+after merge, `--dry-run` to print the execution plan without side effects.
 
 ## Pre-flight: Research Gate
 
@@ -72,6 +72,36 @@ tdd:
   behaviors: []
   regression_test_links: []
 ```
+
+## Dry Run
+
+When `--dry-run` is passed, show what execution would do and stop. No side
+effects.
+
+Run, in order:
+1. The Pre-flight research gate **WITH THE GRAPH BUILD STEP SKIPPED** — only
+   `fdx-graph action:status` and `action:report` plus read-only `action:impact`
+   queries; never `fdx-graph action:build`.
+2. The Guard Check.
+3. The Parallel Guard classification — read affect.md and compute file
+   intersections.
+
+Then print the execution plan and stop. Plan steps carry no per-task agent, so
+show the step action:
+
+```
+DRY RUN — fd-execute for topic: <topic>
+Wave 1 (parallel):
+  Task 1: <action> → [file1, file2]
+  Task 2: <action> → [file3]
+Wave 2 (sequential):
+  Task 3: <action> → [file4] (depends on Task 1)
+Conflicts: <list or NONE>
+Worktrees needed: <n>
+```
+
+MUST NOT: create worktrees, delegate to agents, update STATE.md or
+checkpoint.json, or run `fdx-graph action:build`.
 
 ## Parallel Guard
 

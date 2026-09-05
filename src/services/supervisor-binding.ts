@@ -31,6 +31,7 @@ export const REGISTERED_COMMANDS: readonly string[] = [
   "fd-checkpoint",
   "fd-done",
   "fd-execute",
+  "fd-init",
   "fd-resume",
   "fd-review",
   "fd-status",
