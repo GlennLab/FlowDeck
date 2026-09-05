@@ -135,6 +135,39 @@ Step-by-step workflow description...
 2. Add the skill path to the OpenCode plugin config in `src/index.ts`
 3. Skills become available immediately — no rebuild required
 
+## External Skills (Extra Paths)
+
+Skills can also be loaded from directories outside `src/skills/`. Extra paths come from two sources (merged, config first, duplicates dropped):
+
+1. **Config** — `skills.extraPaths` (array of directories) in your OpenCode config (`opencode.json` or `.opencode/opencode.json`):
+
+   ```json
+   { "skills": { "extraPaths": ["~/shared/skills", "/opt/company-skills"] } }
+   ```
+
+2. **Environment** — `FLOWDECK_SKILLS_PATH`, a colon-separated list of directories.
+
+Each extra path is a directory tree of skills — any directory containing a `SKILL.md` is picked up (the root itself counts when it has a `SKILL.md`). Rules:
+
+- **Validation**: every skill needs `name` + `description` frontmatter, and `name` must equal its directory name. Invalid or missing skills are skipped with a warning — they never break plugin load.
+- **Conflict rule**: bundled skills win. An external skill whose name matches a bundled skill directory is skipped and logged.
+- A duplicate name across extra paths registers only once (first path wins).
+- `bun run validate:skills` runs the same checks over external paths. Note that CI validation is stricter than runtime loading: it also enforces the `origin` frontmatter key, at least one `##` section, and description/body budgets — so a skill may load at runtime yet still fail `validate:skills`.
+
+## Installing a Skill from Git
+
+```bash
+node scripts/skill-install.mjs <git-url> [--dest <dir>]
+```
+
+Shallow-clones the repo into `--dest` (default: `./skills-external/<repo-name>` under the current directory), then validates the skill manifest(s) in the clone. On any failure (clone or validation) the script removes everything it created, leaving no residue. An existing `--dest` is never overwritten.
+
+A repo is valid when it contains a `SKILL.md` at its root (the destination directory name must then equal the skill `name`) or one or more skill directories with valid `SKILL.md` files.
+
+After installing, add the destination (or its parent, e.g. `./skills-external`) to `skills.extraPaths` or `FLOWDECK_SKILLS_PATH`.
+
+**v1 scope:** no auto-update and no version resolver — re-run the install to pick up upstream changes.
+
 ## Authoring Thresholds (Token Budget)
 
 Keep skill metadata tight — descriptions and bodies are loaded into context on every activation. The validator (`scripts/validate-skills.mjs`) enforces: `description` under 25 words (warning at 22), SKILL.md body under 400 lines (warning at 300).

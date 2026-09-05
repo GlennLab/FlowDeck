@@ -4,6 +4,7 @@
     "module": "ESNext",
     "lib": ["ESNext"],
     "moduleResolution": "Bundler",
+    "allowJs": true, // required: tests import the .mjs helpers in scripts/skill-install.mjs
     "strict": true,
     "noEmit": false,
     "ignoreDeprecations": "6.0",

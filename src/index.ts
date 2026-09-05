@@ -10,6 +10,11 @@ import {
   selectRulePaths,
 } from "./services/lazy-rule-loader"
 import { LoopDetector } from "./services/loop-detector"
+import {
+  collectSkillExtraPaths,
+  resolveSkillPaths,
+  selectExternalSkills,
+} from "./services/skill-loader"
 
 import { getAgentConfigs, getAgentRoutes } from "./agents/index"
 import { loadFlowDeckConfig, resolveAgentModels, type FlowDeckConfig } from "./config/index"
@@ -57,6 +62,29 @@ function lazyLoadRulePaths(projectRoot: string): { paths: string[]; diagnostics:
   const paths = getStartupRulePaths(rulesDir, detected)
   const selection = selectRulePaths(rulesDir, { languages: detected, projectRoot })
   return { paths, diagnostics: buildSelectionDiagnostics(selection, { languages: detected, projectRoot }) }
+}
+
+/**
+ * Register external skills (LE-2 R-01/R-03/R-04): extra paths come from
+ * cfg.skills.extraPaths and FLOWDECK_SKILLS_PATH (colon-separated). Only
+ * valid, non-conflicting skill dirs are added to cfg.skills.paths — the
+ * bundled dir always stays. Skips are logged, never fatal.
+ */
+function registerExternalSkills(
+  bundledDir: string,
+  skillsPaths: string[],
+  configExtraPaths: unknown,
+  envExtraPaths: string | undefined,
+  log: (msg: string) => Promise<void>,
+): void {
+  const extraPaths = collectSkillExtraPaths(configExtraPaths, envExtraPaths)
+  const { paths, skipped } = resolveSkillPaths({ bundledDir, extraPaths })
+  for (const s of skipped) log(`[skills] skipping path ${s.path}: ${s.reason}`)
+  const selection = selectExternalSkills(bundledDir, paths.filter(p => p !== bundledDir))
+  for (const s of selection.skipped) log(`[skills] skipping ${s.dir}: ${s.reason}`)
+  for (const dir of selection.added) {
+    if (!skillsPaths.includes(dir)) skillsPaths.push(dir)
+  }
 }
 
 /**
@@ -156,10 +184,16 @@ const plugin: Plugin = async ({ directory, client, worktree }) => {
       const skillsDir = join(__dir, "..", "src", "skills")
       if (existsSync(skillsDir)) {
         const cfgAny = cfg as Record<string, unknown>
-        const skills = (cfgAny.skills && typeof cfgAny.skills === "object" ? cfgAny.skills : { paths: [] }) as { paths?: string[] }
+        const skills = (cfgAny.skills && typeof cfgAny.skills === "object" ? cfgAny.skills : { paths: [] }) as {
+          paths?: string[]
+          extraPaths?: unknown
+        }
         if (!skills.paths) skills.paths = []
         if (!skills.paths.includes(skillsDir)) skills.paths.push(skillsDir)
+        registerExternalSkills(skillsDir, skills.paths, skills.extraPaths, process.env.FLOWDECK_SKILLS_PATH, appLog)
         cfgAny.skills = skills
+      } else {
+        appLog(`[skills] bundled skills dir missing (${skillsDir}); external skills disabled`)
       }
 
       const { paths: rulePaths, diagnostics } = lazyLoadRulePaths(directory)
