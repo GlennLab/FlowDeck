@@ -38,9 +38,13 @@ Plan        <X> steps (<Y> complete)
 Risk        <low|medium|high>   (from affect.md)
 Worktrees   <names, or "none">
 Blockers    <list, or "none">
+Sync        <clean|dirty|conflict>   remote: <remote>
+            last push: <time, or "never">   last pull: <time, or "never">
 ════════════════════════════════════════════════════════════
 Next: <next command in the pipeline>
 ```
+
+When `~/.fd-plan/<slug>/sync.json` is absent, show `Sync        none` instead.
 
 Stage markers:
 - `✅` — recorded complete in `checkpoint.json` `phases`, or implied by STATE.md status
@@ -77,6 +81,13 @@ Blockers:
   ❌ verification failed: 2 tests → run /fd-execute, then /fd-verify
 ```
 
+## Sync
+
+Read `~/.fd-plan/<slug>/sync.json` — purely local, **no network calls**. Show the
+`state` (`clean` | `dirty` | `conflict`), the `remote`, and the last-push and
+last-pull timestamps. A corrupt `sync.json` is treated as absent (show `Sync
+none`); a missing file means sync has never run.
+
 ## JSON output
 
 With `--format json`, print a single JSON object on stdout and nothing else.
@@ -90,12 +101,20 @@ Errors go to stderr and exit with code 1.
   "stage_status": "<current_stage>",
   "artifacts": { "task": true, "affect": true, "plan": true, "architecture": true },
   "blockers": [],
-  "saved_at": "<ISO timestamp>"
+  "saved_at": "<ISO timestamp>",
+  "sync": {
+    "state": "clean",
+    "remote": "<remote>",
+    "last_push": "<ISO timestamp or null>",
+    "last_pull": "<ISO timestamp or null>"
+  }
 }
 ```
 
 - `stage` = `checkpoint.json` `current_command`; `stage_status` = `current_stage`;
   `saved_at` = `checkpoint.json` `saved_at` (fallback: STATE.md).
+- `sync` = `sync.json` (`state`, `remote`, `last_push.at`, `last_pull.at`);
+  `null` when `sync.json` is absent or corrupt.
 - `artifacts` booleans from file existence under `~/.fd-plan/<slug>/<topic>/`
   (architecture.md at slug level).
 - No `phases` field: `checkpoint.json` `phases` is a wave-number→status map, not

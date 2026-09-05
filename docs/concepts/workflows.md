@@ -186,3 +186,39 @@ Any point in the pipeline can be paused and resumed in a new session:
 
 `checkpoint.json` is the primary file `/fd-resume` reads. `STATE.md` is the fallback
 when `checkpoint.json` is absent or unreadable.
+
+---
+
+## Checkpoint Sync
+
+Checkpoints can be synced between machines so a session is pushed on one machine and
+pulled on another. This is an add-on to the pipeline — it introduces no new workflow
+stages:
+
+```
+bun scripts/checkpoint-sync.ts push [--remote <target>]   # after /fd-checkpoint
+bun scripts/checkpoint-sync.ts pull [--remote <target>]   # before /fd-resume
+bun scripts/checkpoint-sync.ts status                     # local metadata only
+```
+
+A snapshot is a tarball of the topic directory plus `STATE.md`, `checkpoint.json`,
+and a manifest (`slug`, `topic`, `saved_at`, `parent`, `host`, FlowDeck version,
+and the `sha256` of the tarball).
+`--remote` is a local path or an scp target (`user@host:/path`); the remote holds the
+archive plus a sidecar `manifest.json` used for comparison. A push lands the archive
+first and the sidecar manifest second; a push that loses the manifest self-heals on
+the next push, which re-writes both.
+
+**Trust boundary.** The remote is a trust boundary: the manifest's `sha256` verifies
+the integrity of the fetched bytes, not the pusher's identity — anyone who can write
+to the remote can push a snapshot.
+
+**Conflict rule.** Sync is forward-only. When the remote is newer and the local state
+has unsynced changes, the CLI stops without overwriting anything and points to
+`/fd-status` and `/fd-resume`. Overwriting the other side requires an explicit
+`--force`, which is recorded in the audit log with a reason.
+
+**Offline-first.** A sync failure (offline, unreachable remote, missing binary) is
+reported and never blocks local work — the local state under `~/.fd-plan/<slug>/`
+stays the source of truth. `/fd-status` reads the local `sync.json` metadata only and
+makes no network calls.

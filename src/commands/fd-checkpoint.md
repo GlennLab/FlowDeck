@@ -65,3 +65,20 @@ checkpoint that `/fd-resume` cannot load.
    File:  ~/.fd-plan/<slug>/checkpoint.json
    Safe to close session. Resume with /fd-resume.
 ```
+
+## Sync (optional)
+
+After the checkpoint is written, offer to push it to the configured remote so the
+session can be resumed on another machine:
+
+```
+bun scripts/checkpoint-sync.ts push [--remote <target>]
+```
+
+- `--remote` is a local path or an scp target (`user@host:/path`); when omitted,
+  the remote recorded in `~/.fd-plan/<slug>/sync.json` is used.
+- Sync is best-effort: when the push fails (offline, unreachable remote, conflict),
+  report the failure and continue — the local checkpoint is already saved and valid.
+  Never block or roll back the checkpoint because of a sync failure.
+- When the CLI stops on a conflict, it overwrites nothing. Relay its instructions
+  (`/fd-status` / `/fd-resume`, or an explicit `--force` decision by the user).

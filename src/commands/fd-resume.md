@@ -9,6 +9,24 @@ Resume a previously interrupted FlowDeck session.
 
 **Input:** $ARGUMENTS — pass `--yes` to skip the confirmation pause.
 
+## Pull (optional)
+
+When the session may have continued on another machine, pull the latest snapshot
+before resuming:
+
+```
+bun scripts/checkpoint-sync.ts pull [--remote <target>]
+```
+
+- When the remote is newer, the local `checkpoint.json`, `STATE.md`, and topic
+  directory are replaced with the remote snapshot.
+- On conflict (the remote is newer and the local state has unsynced changes) the
+  CLI stops without overwriting anything. Report the conflict and its instructions
+  to the user — do not resume over a conflicted state, and do not pass `--force`
+  without an explicit user decision.
+- When the pull fails (offline, no remote configured), continue with the local
+  state and note that the remote was not checked.
+
 ## Steps
 
 1. **Read `~/.fd-plan/<slug>/checkpoint.json` — this is the primary source.**

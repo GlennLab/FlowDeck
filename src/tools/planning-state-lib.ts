@@ -18,13 +18,20 @@ const RESERVED_PLANNING_ENTRIES = new Set(["phases", "logs", "cache"])
 export { codebaseDir } from "./codebase-state"
 
 /**
+ * Global planning root: `~/.fd-plan`.
+ */
+export function fdPlanRoot(): string {
+  return join(homedir(), ".fd-plan")
+}
+
+/**
  * Global planning root for a project.
  *
  * Planning artifacts live outside the repo at `~/.fd-plan/<project-slug>/` so
  * they never pollute the working tree. The slug is the project directory name.
  */
 export function planningDir(directory: string): string {
-  return join(homedir(), ".fd-plan", basename(directory))
+  return join(fdPlanRoot(), basename(directory))
 }
 
 export function statePath(directory: string): string {
