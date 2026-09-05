@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FlowDeck Pipeline Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #181b22; --border: #2a2f3a; --text: #e6e9ef;
+    --muted: #8b93a7; --accent: #7c6cf0; --ok: #3fb96f; --warn: #e0a63f; --idle: #3a4150;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.5 system-ui, sans-serif; background: var(--bg); color: var(--text); }
+  header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+  header h1 { font-size: 16px; margin: 0; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--panel); border: 1px solid var(--border); color: var(--muted); }
+  .controls { display: flex; gap: 10px; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--border); }
+  .controls label { color: var(--muted); font-size: 12px; display: flex; gap: 6px; align-items: center; }
+  .controls input { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; width: 180px; }
+  .controls button { background: var(--accent); color: #fff; border: 0; border-radius: 6px; padding: 7px 14px; cursor: pointer; }
+  main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px 20px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  section { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+  section h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 10px; }
+  .stack { display: flex; flex-direction: column; gap: 16px; }
+  .stage-bar { display: flex; gap: 4px; margin-bottom: 10px; }
+  .stage-seg { flex: 1; text-align: center; font-size: 11px; padding: 6px 4px; border-radius: 5px; background: var(--idle); color: var(--muted); }
+  .stage-seg.complete { background: var(--ok); color: #08130c; }
+  .stage-seg.in_progress { background: var(--warn); color: #171003; }
+  .empty { color: var(--muted); font-style: italic; }
+  .empty code { color: var(--accent); font-style: normal; }
+  dl.meta { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0; }
+  dl.meta dt { color: var(--muted); }
+  dl.meta dd { margin: 0; word-break: break-word; }
+  ul.plain { list-style: none; margin: 0; padding: 0; }
+  ul.plain li { padding: 4px 0; border-bottom: 1px solid var(--border); }
+  ul.plain li:last-child { border-bottom: 0; }
+  .step { display: flex; gap: 8px; align-items: baseline; }
+  .step .box { color: var(--muted); }
+  .step.done .box { color: var(--ok); }
+  .step.done .txt { color: var(--muted); text-decoration: line-through; }
+  .badges { display: flex; flex-wrap: wrap; gap: 8px; }
+  .badge-item { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 12px; }
+  .badge-item b { display: block; font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: top; word-break: break-word; }
+  th { color: var(--muted); font-weight: 500; }
+  .progress { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .err { color: #e0635f; }
+</style>
+</head>
+<body>
+<header>
+  <h1>FlowDeck Pipeline Dashboard</h1>
+  <span class="badge">read-only</span>
+  <span class="badge" id="updated"></span>
+</header>
+
+<section class="controls">
+  <label>Slug <input id="slug" type="text" spellcheck="false" placeholder="FlowDeck"></label>
+  <label>Topic <input id="topic" type="text" spellcheck="false" placeholder="le4-dashboard"></label>
+  <button id="load" type="button">Load</button>
+</section>
+
+<main>
+  <div class="stack">
+    <section>
+      <h2>Pipeline</h2>
+      <div class="stage-bar" id="stage-bar"></div>
+      <dl class="meta" id="meta"></dl>
+    </section>
+    <section>
+      <h2>Plan steps</h2>
+      <div class="progress" id="step-progress"></div>
+      <ul class="plain" id="steps"></ul>
+    </section>
+    <section>
+      <h2>Blockers</h2>
+      <ul class="plain" id="blockers"></ul>
+    </section>
+    <section>
+      <h2>Token budget</h2>
+      <div class="badges" id="budget"></div>
+    </section>
+    <section>
+      <h2>Recent runs</h2>
+      <ul class="plain" id="traces"></ul>
+    </section>
+  </div>
+  <section>
+    <h2>Audit log</h2>
+    <div id="audit-empty"></div>
+    <table id="audit-table" hidden>
+      <thead><tr><th>Time</th><th>Kind</th><th>Agent</th><th>Tool</th><th>Decision</th><th>Reason</th></tr></thead>
+      <tbody id="audit-body"></tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  var POLL_MS = 5000;
+  var AUDIT_LIMIT = 50;
+  var EMPTY_HINT = "run /fd-task eerst";
+  var slugInput = document.getElementById("slug");
+  var topicInput = document.getElementById("topic");
+  var timer = null;
+
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+  function emptyState(node, message) {
+    clear(node);
+    node.appendChild(el("div", "empty", message + " — " + EMPTY_HINT + "."));
+  }
+
+  function readParams() {
+    var q = new URLSearchParams(window.location.search);
+    if (q.get("slug")) slugInput.value = q.get("slug");
+    if (q.get("topic")) topicInput.value = q.get("topic");
+  }
+
+  function renderStageBar(status) {
+    var bar = document.getElementById("stage-bar");
+    clear(bar);
+    var phases = status.phases && status.phases.length ? status.phases : null;
+    if (phases) {
+      phases.forEach(function (phase) {
+        var cls = "stage-seg";
+        if (phase.status === "complete") cls += " complete";
+        else if (phase.status === "in_progress" || phase.status === "in-progress") cls += " in_progress";
+        bar.appendChild(el("div", cls, phase.name));
+      });
+      return;
+    }
+    if (status.stage) bar.appendChild(el("div", "stage-seg in_progress", status.stage));
+    else emptyState(bar, "No pipeline state");
+  }
+
+  function renderMeta(status) {
+    var meta = document.getElementById("meta");
+    clear(meta);
+    var rows = [
+      ["Status", status.status],
+      ["Stage", status.stage ? status.stage + (status.stageStatus ? " → " + status.stageStatus : "") : null],
+      ["Risk", status.risk],
+      ["Task", status.taskTitle],
+      ["Next", status.nextAction],
+      ["Worktrees", status.worktrees && status.worktrees.length ? status.worktrees.join(", ") : null],
+      ["Saved", status.savedAt]
+    ];
+    var any = false;
+    rows.forEach(function (row) {
+      if (row[1] === null || row[1] === undefined || row[1] === "") return;
+      any = true;
+      meta.appendChild(el("dt", null, row[0]));
+      meta.appendChild(el("dd", null, String(row[1])));
+    });
+    if (!any) emptyState(meta, "No state recorded");
+    document.getElementById("updated").textContent = status.savedAt ? "updated " + status.savedAt : "";
+  }
+
+  function renderSteps(status) {
+    var list = document.getElementById("steps");
+    var progress = document.getElementById("step-progress");
+    clear(list);
+    if (!status.steps || status.steps.length === 0) {
+      progress.textContent = "";
+      emptyState(list, "No plan steps");
+      return;
+    }
+    progress.textContent = status.stepsComplete + " of " + status.stepsTotal + " complete";
+    status.steps.forEach(function (step) {
+      var li = el("li", "step" + (step.done ? " done" : ""));
+      li.appendChild(el("span", "box", step.done ? "[x]" : "[ ]"));
+      li.appendChild(el("span", "txt", step.text));
+      list.appendChild(li);
+    });
+  }
+
+  function renderBlockers(status) {
+    var list = document.getElementById("blockers");
+    clear(list);
+    if (!status.blockers || status.blockers.length === 0) {
+      list.appendChild(el("li", null, "none"));
+      return;
+    }
+    status.blockers.forEach(function (b) { list.appendChild(el("li", null, b)); });
+  }
+
+  function renderBudget(status) {
+    var wrap = document.getElementById("budget");
+    clear(wrap);
+    if (!status.budget) { emptyState(wrap, "No budget data"); return; }
+    var b = status.budget;
+    [["Total", b.total], ["Used", b.used], ["Remaining", b.remaining], ["Context", b.context]].forEach(function (item) {
+      var badge = el("div", "badge-item");
+      badge.appendChild(el("b", null, Number(item[1]).toLocaleString()));
+      badge.appendChild(document.createTextNode(item[0]));
+      wrap.appendChild(badge);
+    });
+  }
+
+  function renderTraces(status) {
+    var list = document.getElementById("traces");
+    clear(list);
+    if (!status.traces || status.traces.length === 0) {
+      emptyState(list, "No runs recorded");
+      return;
+    }
+    status.traces.forEach(function (t) {
+      list.appendChild(el("li", null,
+        t.command + " · " + t.status + " · risk " + t.riskScore +
+        " · " + t.filesTouched + " file(s) · " + t.startedAt +
+        (t.outcome ? " · " + t.outcome : "")
+      ));
+    });
+  }
+
+  function renderAudit(audit) {
+    var table = document.getElementById("audit-table");
+    var body = document.getElementById("audit-body");
+    var empty = document.getElementById("audit-empty");
+    clear(body);
+    if (!audit || !audit.events || audit.events.length === 0) {
+      table.hidden = true;
+      emptyState(empty, "No audit events");
+      return;
+    }
+    empty.textContent = "";
+    table.hidden = false;
+    audit.events.slice().reverse().forEach(function (e) {
+      var tr = document.createElement("tr");
+      [e.timestamp, e.kind, e.agent, e.tool, e.decision, e.reason].forEach(function (v) {
+        tr.appendChild(el("td", null, v === null || v === undefined ? "" : String(v)));
+      });
+      body.appendChild(tr);
+    });
+  }
+
+  async function load() {
+    var slug = slugInput.value.trim();
+    var topic = topicInput.value.trim();
+    if (!slug || !topic) {
+      emptyState(document.getElementById("stage-bar"), "Set slug and topic");
+      return;
+    }
+    try {
+      var res = await fetch("/api/status?slug=" + encodeURIComponent(slug) + "&topic=" + encodeURIComponent(topic));
+      if (res.status === 404) {
+        clear(document.getElementById("stage-bar"));
+        document.getElementById("stage-bar").appendChild(el("div", "empty", "No topic found — " + EMPTY_HINT + "."));
+        return;
+      }
+      if (!res.ok) throw new Error("status " + res.status);
+      var status = await res.json();
+      renderStageBar(status);
+      renderMeta(status);
+      renderSteps(status);
+      renderBlockers(status);
+      renderBudget(status);
+      renderTraces(status);
+    } catch (err) {
+      var bar = document.getElementById("stage-bar");
+      clear(bar);
+      bar.appendChild(el("div", "err", String(err && err.message ? err.message : err)));
+    }
+    try {
+      var areq = await fetch("/api/audit?slug=" + encodeURIComponent(slug) + "&limit=" + AUDIT_LIMIT);
+      if (areq.ok) renderAudit(await areq.json());
+    } catch (err) { /* audit panel keeps its previous state */ }
+  }
+
+  document.getElementById("load").addEventListener("click", load);
+  readParams();
+  load();
+  timer = setInterval(load, POLL_MS);
+  if (timer && timer.unref) timer.unref();
+})();
+</script>
+</body>
+</html>

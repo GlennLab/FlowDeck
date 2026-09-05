@@ -5,7 +5,7 @@ argument-hint: [--topic=<slug> | --all] [--format=<text|json>]
 
 # Status
 
-Show where the current task sits in the pipeline and what is blocking it.
+Show where the current task sits in the pipeline and what is blocking it. A live visual view of the same state is available from the read-only local dashboard: `bun run dashboard -- --slug <slug> --topic <topic>` (see `docs/reference/dashboard.md`).
 
 **Input:** $ARGUMENTS — optional `--topic=<slug>` for a specific topic, `--all` to list
 every topic in the project.

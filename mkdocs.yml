@@ -45,6 +45,7 @@ nav:
   - Reference:
       - reference/rules.md
       - reference/hooks.md
+      - reference/dashboard.md
 
 plugins:
   - search

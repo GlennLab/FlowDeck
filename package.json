@@ -32,6 +32,7 @@
     "prepublishOnly": "bun run clean && bun run build",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
+    "dashboard": "bun scripts/dashboard.ts",
     "validate:skills": "node scripts/validate-skills.mjs",
     "validate:docs": "node scripts/validate-docs.mjs"
   },

@@ -43,6 +43,7 @@ See [Commands](commands/) for full command documentation.
 
 - [Hooks](reference/hooks.md) — Lifecycle hooks and event interception
 - [Rules](reference/rules.md) — Coding standards and behavioral rules
+- [Dashboard](reference/dashboard.md) — Read-only local visual view of the pipeline state
 - [Governance](concepts/governance.md) — Agent contracts, validator, supervisor, and scorecards
 - [Intelligence](concepts/intelligence.md) — Patch trust, failure replay, and regression prediction
 
