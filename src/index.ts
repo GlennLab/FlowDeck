@@ -97,7 +97,17 @@ const plugin: Plugin = async ({ directory, client, worktree }) => {
     client.app.log({ body: { service: "flowdeck", level: "info", message: msg } })
       .then(() => undefined).catch(() => {})
 
-  let flowdeckConfig: FlowDeckConfig = loadFlowDeckConfig(directory)
+  let flowdeckConfig: FlowDeckConfig = loadFlowDeckConfig(directory, {
+    onInvalid: (configPath, errors) => {
+      client.app.log({
+        body: {
+          service: "flowdeck",
+          level: "error",
+          message: `Invalid flowdeck.json at ${configPath}: ${errors.join("; ")}`,
+        },
+      }).catch(() => {})
+    },
+  })
   const loopDetector = new LoopDetector(flowdeckConfig.governance?.loopDetection, appLog)
 
   const { mcps } = buildFlowDeckMcpsWithMeta()

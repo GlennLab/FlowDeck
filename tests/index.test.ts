@@ -279,3 +279,48 @@ describe("plugin entry: toolGuardHook wiring (bug 3b)", () => {
     expect(caught!.message).toMatch(/blocked in phase 1/)
   })
 })
+
+/**
+ * QW-1: an invalid flowdeck.json must surface a clear app.log error at
+ * plugin load. The appLog helper hard-codes level "info", so the onInvalid
+ * callback calls client.app.log directly with level "error".
+ */
+describe("plugin entry: flowdeck.json shape validation", () => {
+  let dir: string
+
+  beforeEach(() => {
+    dir = makeTempDir()
+  })
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it("logs an error naming the config path when flowdeck.json has an invalid shape", async () => {
+    const configPath = join(dir, ".flowdeck.json")
+    writeFileSync(configPath, JSON.stringify({ governance: { validator: { mode: "yolo" } } }), "utf-8")
+    const client = createMockClient()
+
+    await plugin({ directory: dir, client } as any, {})
+
+    const errorLog = (client.app.log as any).mock.calls.find(
+      (call: any) => call[0]?.body?.level === "error",
+    )
+    expect(errorLog).toBeDefined()
+    expect(errorLog[0].body.service).toBe("flowdeck")
+    expect(errorLog[0].body.message).toContain(configPath)
+    expect(errorLog[0].body.message).toContain("governance.validator.mode")
+  })
+
+  it("does not log a config error when flowdeck.json is valid", async () => {
+    writeFileSync(join(dir, ".flowdeck.json"), JSON.stringify({ maxDelegationDepth: 3 }), "utf-8")
+    const client = createMockClient()
+
+    await plugin({ directory: dir, client } as any, {})
+
+    const errorLog = (client.app.log as any).mock.calls.find(
+      (call: any) => call[0]?.body?.level === "error",
+    )
+    expect(errorLog).toBeUndefined()
+  })
+})
