@@ -29,6 +29,7 @@ nav:
       - commands/fd-checkpoint.md
       - commands/fd-resume.md
       - commands/fd-status.md
+      - commands/fd-init.md
   - Skills:
       - skills/index.md
       - skills/planning.md
