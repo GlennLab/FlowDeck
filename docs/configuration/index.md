@@ -239,6 +239,38 @@ Other valid targets include `planner`, `architect`, `coder`, `reviewer`, `tester
 
 ---
 
+## `vision` — Image Analysis Tool
+
+> **Default:** enabled (absent = enabled)
+
+Configure the `vision` tool, which analyzes an image file with a local vision model and returns text. The default target is Ollama, which serves an OpenAI-compatible API at `http://localhost:11434/v1`.
+
+```json
+{
+  "vision": {
+    "enabled": true,
+    "baseUrl": "http://localhost:11434/v1",
+    "model": "qwen3.5:2b",
+    "timeoutMs": 120000,
+    "maxOutputTokens": 1024
+  }
+}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `true` | Enable the vision tool. Set to `false` to disable it |
+| `baseUrl` | string | `http://localhost:11434/v1` | OpenAI-compatible API root, including the `/v1` prefix. The tool appends `/chat/completions` and `/models` |
+| `model` | string | `qwen3.5:2b` | Vision model name/tag to query |
+| `timeoutMs` | number | `120000` | Request timeout in milliseconds |
+| `maxOutputTokens` | number | `1024` | Maximum output tokens per request |
+
+> **Note:** authentication is environment-variable only. Set `VISION_API_KEY` (or `OPENAI_API_KEY` as a fallback) if your endpoint requires a key — there is no `apiKey` config field, and secrets are never stored in the config file.
+
+Quick start: run `ollama serve` and `ollama pull qwen3.5:2b` once, then the `vision` tool works with the defaults.
+
+---
+
 ## Environment Variables
 
 FlowDeck reads the following environment variables:
