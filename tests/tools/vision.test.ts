@@ -1,7 +1,7 @@
 /**
  * Vision tool tests — image→text bridge.
  *
- * Covers all 21 cases from design.md §5:
+ * Covers all 22 cases from design.md §5 (21 + error-matrix row 13):
  *   1. general happy path (structured result + framing line)
  *   2. code mode (temperature 0.1, transcription template)
  *   3. diagram mode (JSON-only template, verbatim pass-through)
@@ -23,6 +23,7 @@
  *  19. empty / non-string response content
  *  20. plugin registry exposes "vision"
  *  21. HTTP 500 (error-matrix row 11)
+ *  22. malformed / non-http(s) baseUrl (error-matrix row 13, pre-network fail-fast)
  *
  * Mock pattern (new to this repo): swap globalThis.fetch in beforeEach,
  * restore in afterEach. Response is a Bun global.
@@ -398,5 +399,25 @@ describe("vision tool", () => {
     const result = await visionTool.execute({ imagePath: "img.png" }, makeCtx(TMP))
 
     expect(result).toBe("Error: Vision server returned 500. internal boom")
+  })
+
+  it("22. malformed or non-http(s) baseUrl returns the invalid-URL error before any network I/O", async () => {
+    writeImage()
+
+    // (a) unparseable URL
+    writeConfig({ vision: { baseUrl: "not-a-url" } })
+    const malformedResult = await visionTool.execute({ imagePath: "img.png" }, makeCtx(TMP))
+    expect(malformedResult).toBe(
+      'Error: vision.baseUrl "not-a-url" is not a valid http(s) URL. Set vision.baseUrl in flowdeck.json (e.g. http://localhost:11434/v1).',
+    )
+
+    // (b) parseable but non-http(s) scheme
+    writeConfig({ vision: { baseUrl: "file:///etc/passwd" } })
+    const schemeResult = await visionTool.execute({ imagePath: "img.png" }, makeCtx(TMP))
+    expect(schemeResult).toBe(
+      'Error: vision.baseUrl "file:///etc/passwd" is not a valid http(s) URL. Set vision.baseUrl in flowdeck.json (e.g. http://localhost:11434/v1).',
+    )
+
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
