@@ -51,6 +51,7 @@ import { hashEditTool } from "./tools/hash-edit"
 import { loadRulesTool, listRulesTool } from "./tools/load-rules"
 import { planningStateTool } from "./tools/planning-state"
 import { repoMemoryTool } from "./tools/repo-memory"
+import { visionTool } from "./tools/vision"
 
 const __dir = dirname(fileURLToPath(import.meta.url))
 
@@ -214,6 +215,7 @@ const plugin: Plugin = async ({ directory, client, worktree }) => {
       "list-rules": listRulesTool,
       "capture-lesson": captureLessonTool,
       "review-lessons": reviewLessonsTool,
+      "vision": visionTool,
       "fdx-context": fdxContextTool,
       "fdx-decisions": fdxDecisionsTool,
       "fdx-validate": fdxValidateTool,

@@ -89,6 +89,7 @@ export const VALID_CONFIG_KEYS: (keyof FlowDeckConfig)[] = [
   "designFirst",
   "governance",
   "maxWritesPerAgent",
+  "vision",
 ]
 
 function sanitizeConfig(parsed: unknown): FlowDeckConfig {

@@ -101,6 +101,19 @@ describe("loadFlowDeckConfig", () => {
     const cfg = loadFlowDeckConfig(dir)
     expect(cfg.agentModels?.planner?.model).toBe("provider/ model // with /* comment */")
   })
+
+  it("preserves the vision section through sanitizeConfig", () => {
+    writeFileSync(
+      join(dir, ".flowdeck.json"),
+      JSON.stringify({
+        vision: { baseUrl: "http://localhost:11434/v1", model: "qwen3.5:2b", timeoutMs: 30000 },
+      }),
+      "utf-8",
+    )
+
+    const cfg = loadFlowDeckConfig(dir)
+    expect(cfg.vision).toEqual({ baseUrl: "http://localhost:11434/v1", model: "qwen3.5:2b", timeoutMs: 30000 })
+  })
 })
 
 describe("resolveAgentModels", () => {
