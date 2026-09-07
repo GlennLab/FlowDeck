@@ -149,6 +149,7 @@ FlowDeck registers these tools for use by agents and commands:
 | `policy-engine` | Evaluate agent actions against project rules |
 | `repo-memory` | Persistent memory across sessions |
 | `codegraph` | Query codebase structure from indexed graph |
+| `vision` | Analyze an image file with a local vision model and return text (modes: general/code/diagram/ui). Requires a running vision server (default: Ollama at http://localhost:11434) |
 
 ## Plugin Initialization
 
