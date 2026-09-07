@@ -31,6 +31,14 @@ const DESIGN_FIRST_SPEC: Record<string, FieldSpec> = {
   defaultSkillsByTaskType: { kind: "recordOfStringArrays" },
 }
 
+const VISION_SPEC: Record<string, FieldSpec> = {
+  enabled: { kind: "boolean" },
+  baseUrl: { kind: "string" },
+  model: { kind: "string" },
+  timeoutMs: { kind: "number" },
+  maxOutputTokens: { kind: "number" },
+}
+
 const GOVERNANCE_SECTION_SPECS: Record<string, Record<string, FieldSpec>> = {
   validator: {
     mode: { kind: "enum", options: ["off", "advisory", "strict"] },
@@ -192,6 +200,7 @@ export function validateFlowDeckConfig(parsed: unknown): string[] {
   if ("maxDelegationDepth" in parsed) errors.push(...validateNonNegativeNumber("maxDelegationDepth", parsed.maxDelegationDepth))
   if ("maxWritesPerAgent" in parsed) errors.push(...validateNonNegativeNumber("maxWritesPerAgent", parsed.maxWritesPerAgent))
   if ("designFirst" in parsed) errors.push(...validateFields("designFirst", parsed.designFirst, DESIGN_FIRST_SPEC))
+  if ("vision" in parsed) errors.push(...validateFields("vision", parsed.vision, VISION_SPEC))
   if ("governance" in parsed) errors.push(...validateGovernance(parsed.governance))
   return errors
 }

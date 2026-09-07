@@ -31,6 +31,25 @@ export interface FlowDeckConfig {
    * Default: 15. Set to 0 to disable.
    */
   maxWritesPerAgent?: number;
+  /** Vision tool configuration (image→text via a local/hosted vision model). */
+  vision?: VisionConfig;
+}
+
+export interface VisionConfig {
+  /** Whether the vision tool is active. Default: true (absent = enabled). */
+  enabled?: boolean;
+  /**
+   * OpenAI-compatible API root, including the /v1 prefix.
+   * The tool appends /chat/completions and /models.
+   * Default: "http://localhost:11434/v1"
+   */
+  baseUrl?: string;
+  /** Vision model name/tag. Default: "qwen3.5:2b" */
+  model?: string;
+  /** Request timeout in milliseconds. Default: 120000 */
+  timeoutMs?: number;
+  /** Maximum output tokens. Default: 1024 */
+  maxOutputTokens?: number;
 }
 
 export interface GovernanceConfig {

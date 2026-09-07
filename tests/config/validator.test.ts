@@ -167,6 +167,32 @@ describe("validateFlowDeckConfig", () => {
     ])
   })
 
+  it("should return no errors when vision is fully valid", () => {
+    expect(
+      validateFlowDeckConfig({
+        vision: {
+          enabled: true,
+          baseUrl: "http://localhost:11434/v1",
+          model: "qwen3.5:2b",
+          timeoutMs: 120000,
+          maxOutputTokens: 1024,
+        },
+      }),
+    ).toEqual([])
+  })
+
+  it("should name the key when vision has an unknown sub-key", () => {
+    expect(validateFlowDeckConfig({ vision: { apiKey: "test-key-123" } })).toEqual([
+      "vision.apiKey: unknown key",
+    ])
+  })
+
+  it("should report the path when vision.timeoutMs is not a number", () => {
+    expect(validateFlowDeckConfig({ vision: { timeoutMs: "fast" } })).toEqual([
+      'vision.timeoutMs: expected a number, got "fast"',
+    ])
+  })
+
   it("should report an error when governance is not an object", () => {
     expect(validateFlowDeckConfig({ governance: true })).toEqual([
       "governance: expected an object, got true",
