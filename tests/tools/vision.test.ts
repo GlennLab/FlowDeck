@@ -176,8 +176,9 @@ describe("vision tool", () => {
     await visionTool.execute({ imagePath: "img.png", prompt: "focus on SQL" }, makeCtx(TMP))
 
     const { body } = lastRequest()
-    expect(body.messages[0].content[0].text).toContain("Describe this image in detail")
-    expect(body.messages[0].content[0].text).endsWith("Additional instruction: focus on SQL")
+    const text = body.messages[0].content[0].text
+    expect(text).toContain("Describe this image in detail")
+    expect(text.endsWith("Additional instruction: focus on SQL")).toBe(true)
   })
 
   it("6. relative imagePath resolves against context.directory", async () => {
