@@ -150,6 +150,8 @@ site
 .omo
 .serena
 .claude
+.idea/
+.fd-plan/
 target/*
 
 # Worktree scratch space (test artifacts from fdx-worktree.test.ts)
