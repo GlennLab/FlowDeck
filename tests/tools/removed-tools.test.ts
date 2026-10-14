@@ -9,7 +9,8 @@ describe("removed delegation tools", () => {
   })
 
   it("plugin tool registry does not expose a delegate tool", async () => {
-    const { default: plugin } = await import("@/index")
+    const { default: entry } = await import("@/index")
+    const plugin = (entry as { server: (input: unknown, extra?: unknown) => Promise<unknown> }).server
     const mockClient: any = {
       app: { log: vi.fn().mockResolvedValue(undefined) },
       session: {

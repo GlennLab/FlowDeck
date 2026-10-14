@@ -366,7 +366,8 @@ describe("vision tool", () => {
   })
 
   it("20. plugin registry exposes the vision tool", async () => {
-    const { default: plugin } = await import("@/index")
+    const { default: entry } = await import("@/index")
+    const plugin = entry.server as unknown as (input: unknown, extra?: unknown) => Promise<unknown>
     const mockClient: any = {
       app: { log: vi.fn().mockResolvedValue(undefined) },
       session: {

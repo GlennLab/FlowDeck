@@ -52,11 +52,12 @@ import { loadRulesTool, listRulesTool } from "./tools/load-rules"
 import { planningStateTool } from "./tools/planning-state"
 import { repoMemoryTool } from "./tools/repo-memory"
 import { visionTool } from "./tools/vision"
+import { createV2Adapter } from "./v2/index"
 
 const __dir = dirname(fileURLToPath(import.meta.url))
 
 /** Select FlowDeck rule paths for cfg.instructions injection (Step 4 will swap for a leaner loader). */
-function lazyLoadRulePaths(projectRoot: string): { paths: string[]; diagnostics: string } {
+export function lazyLoadRulePaths(projectRoot: string): { paths: string[]; diagnostics: string } {
   const rulesDir = join(__dir, "..", "src", "rules")
   if (!existsSync(rulesDir)) return { paths: [], diagnostics: "[LazyRuleLoader] rules directory not found" }
   const detected = detectProjectLanguages(projectRoot)
@@ -104,7 +105,7 @@ function extractSessionErrorMessage(event: { properties?: unknown }): string {
 }
 
 /** Load FlowDeck slash commands from src/commands/*.md (parses frontmatter description). */
-function loadCommands(): Record<string, { description?: string; template: string }> {
+export function loadCommands(): Record<string, { description?: string; template: string }> {
   const dir = join(__dir, "..", "src", "commands")
   if (!existsSync(dir)) return {}
   const out: Record<string, { description?: string; template: string }> = {}
@@ -147,7 +148,7 @@ const plugin: Plugin = async ({ directory, client, worktree }) => {
   const contextMonitor = createContextWindowMonitorHook()
 
   return {
-    name: "@dv.nghiem/flowdeck",
+    name: "@glennlab/flowdeck",
     agent: {},
     mcp: mcps,
 
@@ -296,4 +297,17 @@ const plugin: Plugin = async ({ directory, client, worktree }) => {
   }
 }
 
-export default plugin
+/**
+ * Dual entrypoint. OpenCode V2 consumes {id, setup}; OpenCode V1 (>= 1.18.29)
+ * consumes {server}. The setup adapter bridges every V1 extension point onto
+ * its V2 equivalent — see src/v2/index.ts. "V1 plugin implementations do not
+ * run in V2" (docs/build/plugins/migrate-v1), so both entrypoints are wired
+ * from the same V1 plugin instance.
+ */
+const flowdeckEntry = {
+  id: "@glennlab/flowdeck",
+  setup: createV2Adapter(plugin),
+  server: plugin,
+}
+
+export default flowdeckEntry

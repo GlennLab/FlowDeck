@@ -14,7 +14,9 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync, readFileSync
 import { tmpdir } from "os"
 import { join } from "path"
 import { planningDir } from "@/tools/planning-state-lib"
-import plugin from "@/index"
+import entry from "@/index"
+
+const plugin = entry.server as unknown as (input: unknown, extra?: unknown) => Promise<unknown>
 
 function makeTempDir(): string {
   return mkdtempSync(join(tmpdir(), "flowdeck-index-test-"))
@@ -79,7 +81,7 @@ describe("plugin entry", () => {
     const client = createMockClient()
     const instance = await loadPlugin(client)
 
-    expect(instance.name).toBe("@dv.nghiem/flowdeck")
+    expect(instance.name).toBe("@glennlab/flowdeck")
     expect(instance.agent).toBeDefined()
     expect(instance.mcp).toBeDefined()
     expect(instance.tool).toBeDefined()

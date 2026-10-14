@@ -361,7 +361,8 @@ describe("notifications — no stdout writes (TUI safe)", () => {
 
 describe("architectural invariant — no new log-management tool introduced", () => {
   it("existing tool set does not include a new log or tui-layout management tool", async () => {
-    const { default: plugin } = await import("@/index")
+    const { default: entry } = await import("@/index")
+    const plugin = entry.server as unknown as (input: unknown, extra?: unknown) => Promise<unknown>
     const mockClient: any = {
       app: { log: vi.fn().mockResolvedValue(undefined) },
       session: {
@@ -396,7 +397,8 @@ describe("architectural invariant — no new log-management tool introduced", ()
   })
 
   it("removed run-pipeline tool stays absent", async () => {
-    const { default: plugin } = await import("@/index")
+    const { default: entry } = await import("@/index")
+    const plugin = entry.server as unknown as (input: unknown, extra?: unknown) => Promise<unknown>
     const mockClient: any = {
       app: { log: vi.fn().mockResolvedValue(undefined) },
       session: {
